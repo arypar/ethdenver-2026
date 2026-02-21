@@ -14,13 +14,12 @@ export function TopBar({ children }: TopBarProps) {
         <div className="flex items-center gap-2.5">
           <div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-primary/20 border border-primary/30">
             <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
-              <path d="M4 12V7c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#FF007A" strokeWidth="1.8" strokeLinecap="round" fill="none" />
-              <circle cx="12" cy="7" r="1.5" fill="#FF007A" />
-              <circle cx="4" cy="12" r="1.5" fill="#D973A3" />
+              <rect x="2" y="4.5" width="6" height="7" rx="3" stroke="#FF007A" strokeWidth="1.5" fill="none" />
+              <rect x="8" y="4.5" width="6" height="7" rx="3" stroke="#D973A3" strokeWidth="1.5" fill="none" />
             </svg>
             <div className="absolute inset-0 rounded-lg" style={{ boxShadow: '0 0 12px rgba(255,0,122,0.2)' }} />
           </div>
-          <span className="text-[15px] font-semibold tracking-[-0.02em] text-white">UniSignal</span>
+          <span className="text-[15px] font-semibold tracking-[-0.02em] text-white">Chaintology</span>
         </div>
 
         <div className="hidden sm:block">{children}</div>

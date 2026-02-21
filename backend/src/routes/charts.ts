@@ -1,21 +1,28 @@
 import { Router } from 'express';
 import { supabase, DB_ENABLED } from '../lib/supabase.js';
 import { tracker } from '../lib/pool-tracker.js';
+import { monadTracker } from '../lib/monad-tracker.js';
 import { log, logError } from '../lib/log.js';
 
 const router = Router();
 
-router.get('/charts', async (_req, res) => {
+router.get('/charts', async (req, res) => {
   if (!DB_ENABLED || !supabase) {
     res.json([]);
     return;
   }
 
-  const { data, error } = await supabase
+  const chainFilter = req.query.chain as string | undefined;
+
+  let query = supabase
     .from('dashboard_charts')
     .select('*')
     .order('position', { ascending: true })
     .order('created_at', { ascending: false });
+
+  if (chainFilter) query = query.eq('chain', chainFilter);
+
+  const { data, error } = await query;
 
   if (error) {
     logError('charts', `Load: ${error.message}`);
@@ -31,11 +38,13 @@ router.get('/charts', async (_req, res) => {
       pool: row.pool_name,
       range: row.time_range,
       chartType: row.chart_type,
+      chain: row.chain || 'eth',
+      ...(row.pool_address ? { poolAddress: row.pool_address } : {}),
     },
     createdAt: new Date(row.created_at).getTime(),
   }));
 
-  log('charts', `Loaded ${charts.length} charts from DB`);
+  log('charts', `Loaded ${charts.length} charts from DB${chainFilter ? ` (chain=${chainFilter})` : ''}`);
   res.json(charts);
 });
 
@@ -51,7 +60,15 @@ router.post('/charts', async (req, res) => {
     return;
   }
 
-  await tracker.track(config.pool);
+  const chain = config.chain || 'eth';
+
+  if (config.metric !== 'Liquidity') {
+    if (chain === 'monad') {
+      await monadTracker.track(config.pool);
+    } else {
+      await tracker.track(config.pool);
+    }
+  }
 
   const { error } = await supabase.from('dashboard_charts').upsert({
     id,
@@ -60,6 +77,8 @@ router.post('/charts', async (req, res) => {
     time_range: config.range,
     chart_type: config.chartType || 'area',
     title: title || `${config.pool} ${config.metric}`,
+    chain,
+    ...(config.poolAddress ? { pool_address: config.poolAddress } : {}),
   }, { onConflict: 'id' });
 
   if (error) {

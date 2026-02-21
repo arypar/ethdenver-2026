@@ -1,5 +1,6 @@
 import { supabase, DB_ENABLED } from './supabase.js';
 import { tracker, type SwapRecord } from './pool-tracker.js';
+import { monadTracker, type MonadSwapRecord } from './monad-tracker.js';
 import { log, logError } from './log.js';
 
 type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
@@ -22,6 +23,7 @@ interface DbRule {
   name: string;
   enabled: boolean;
   pool: string;
+  chain: string;
   conditions: RuleCondition[];
   actions: RuleAction[];
 }
@@ -75,6 +77,7 @@ async function loadEnabledRules(): Promise<DbRule[]> {
     name: r.name,
     enabled: r.enabled,
     pool: r.pool,
+    chain: r.chain || 'eth',
     conditions: r.conditions as RuleCondition[],
     actions: r.actions as RuleAction[],
   }));
@@ -150,10 +153,7 @@ export function startRuleEngine() {
   setTimeout(() => logActiveRules(), 2000);
   setInterval(() => logActiveRules(), 60_000);
 
-  tracker.on('swap', async (swap: SwapRecord) => {
-    const rules = await loadEnabledRules();
-    const matchingRules = rules.filter(r => r.pool === swap.pool);
-
+  async function evaluateRules(matchingRules: DbRule[], swap: SwapRecord) {
     if (matchingRules.length === 0) return;
 
     log('rule-engine', `Evaluating ${matchingRules.length} rule(s) for ${swap.pool} swap | price $${swap.price.toLocaleString()} | vol $${swap.volumeUSD.toFixed(2)}`);
@@ -186,7 +186,33 @@ export function startRuleEngine() {
       log('rule-engine', `  "${rule.name}" — TRIGGERED! Actions: ${proposedActions.join(', ')}`);
       await insertAction(rule, swap, conditionsMet, proposedActions);
     }
+  }
+
+  tracker.on('swap', async (swap: SwapRecord) => {
+    const rules = await loadEnabledRules();
+    const matchingRules = rules.filter(r => r.chain === 'eth' && r.pool === swap.pool);
+    await evaluateRules(matchingRules, swap);
   });
 
-  log('rule-engine', 'Server-side rule engine started — evaluating on every swap');
+  monadTracker.on('swap', async (monadSwap: MonadSwapRecord) => {
+    const rules = await loadEnabledRules();
+    const matchingRules = rules.filter(r =>
+      r.chain === 'monad' && r.pool.toLowerCase() === monadSwap.token.toLowerCase(),
+    );
+    if (matchingRules.length === 0) return;
+
+    const swapRecord: SwapRecord = {
+      pool: monadSwap.token,
+      blockNumber: monadSwap.blockNumber,
+      price: monadSwap.price,
+      volumeUSD: monadSwap.volumeMON,
+      feeUSD: 0,
+      txHash: monadSwap.txHash,
+      timestamp: monadSwap.timestamp,
+    };
+
+    await evaluateRules(matchingRules, swapRecord);
+  });
+
+  log('rule-engine', 'Server-side rule engine started — evaluating on every swap (ETH + Monad)');
 }

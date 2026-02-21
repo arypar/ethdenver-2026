@@ -11,10 +11,10 @@ import { RuleCanvas } from './RuleCanvas';
 import { DragOverlayBlock } from './RuleBlock';
 import { ActiveRulesList } from './ActiveRulesList';
 import {
-  PALETTE_ITEMS, createDefaultConfig,
+  PALETTE_ITEMS, createDefaultConfig, getBlockError,
   type CanvasBlock, type PaletteItem, type BlockCategory,
 } from './block-types';
-import type { Rule, TriggerType, Pool, ConditionField, ConditionOperator, ActionType } from '@/lib/types';
+import type { ChainId, Rule, TriggerType, Pool, ConditionField, ConditionOperator, ActionType } from '@/lib/types';
 
 interface RulesTabProps {
   connected: boolean;
@@ -46,7 +46,10 @@ export function RulesTab({
       config: createDefaultConfig(item.category, item.type),
     };
     setBlocks(prev => {
-      const sorted = [...prev, newBlock];
+      const base = item.category === 'trigger'
+        ? prev.filter(b => b.category !== 'trigger')
+        : prev;
+      const sorted = [...base, newBlock];
       sorted.sort((a, b) => categoryOrder(a.category) - categoryOrder(b.category));
       return sorted;
     });
@@ -87,7 +90,9 @@ export function RulesTab({
       return;
     }
 
-    if (activeId !== overId && blocks.some(b => b.id === activeId) && blocks.some(b => b.id === overId)) {
+    const activeBlock = blocks.find(b => b.id === activeId);
+    const overBlock = blocks.find(b => b.id === overId);
+    if (activeBlock && overBlock && activeBlock.category === overBlock.category && activeId !== overId) {
       setBlocks(prev => {
         const oldIdx = prev.findIndex(b => b.id === activeId);
         const newIdx = prev.findIndex(b => b.id === overId);
@@ -116,20 +121,21 @@ export function RulesTab({
   };
 
   const hasTriggersAndActions = blocks.some(b => b.category === 'trigger') && blocks.some(b => b.category === 'action');
+  const allBlocksValid = blocks.length > 0 && blocks.every(b => getBlockError(b) === null);
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">Rules Builder</h1>
         <p className="mt-1 text-[13px] text-white/40">Set price alerts and swap recommendations for any pool.</p>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[200px_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]">
           <div className="lg:sticky lg:top-[80px] lg:self-start">
             <BlockPalette onClickAdd={addBlock} />
           </div>
-          <RuleCanvas name={name} onNameChange={setName} blocks={blocks} onUpdateBlock={updateBlock} onRemoveBlock={removeBlock} onActivate={handleActivate} canActivate={hasTriggersAndActions} />
+          <RuleCanvas name={name} onNameChange={setName} blocks={blocks} onUpdateBlock={updateBlock} onRemoveBlock={removeBlock} onActivate={handleActivate} canActivate={hasTriggersAndActions && allBlocksValid} />
         </div>
 
         <ActiveRulesList rules={rules} onToggle={(id, enabled) => onUpdateRule(id, { enabled })} onEdit={handleEdit} onDuplicate={onDuplicateRule} onDelete={onRemoveRule} onSimulate={onSimulateTrigger} />
@@ -157,7 +163,11 @@ function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: st
     id: existingId || crypto.randomUUID(),
     name: name || 'Untitled Rule',
     enabled: true,
-    trigger: { type: 'Swap' as TriggerType, pool: (String(t?.config.pool) || 'WETH/USDC') as Pool },
+    trigger: {
+      type: 'Swap' as TriggerType,
+      pool: (String(t?.config.pool) || 'WETH/USDC') as Pool,
+      chain: (String(t?.config.chain) || 'eth') as ChainId,
+    },
     conditions: conditions.map(c => ({
       id: c.id, field: c.type as ConditionField, operator: (String(c.config.operator) || '>') as ConditionOperator,
       value: String(c.config.value || ''),
@@ -172,7 +182,7 @@ function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: st
 
 function convertRuleToBlocks(rule: Rule): CanvasBlock[] {
   const blocks: CanvasBlock[] = [];
-  blocks.push({ id: crypto.randomUUID(), category: 'trigger', type: 'Pool', config: { pool: rule.trigger.pool } });
+  blocks.push({ id: crypto.randomUUID(), category: 'trigger', type: 'Pool', config: { pool: rule.trigger.pool, chain: rule.trigger.chain || 'eth' } });
   for (const c of rule.conditions) {
     const config: Record<string, string | number> = { operator: c.operator, value: c.value };
     if (c.window) config.window = c.window;

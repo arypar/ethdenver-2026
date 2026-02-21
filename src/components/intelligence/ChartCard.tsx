@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Pencil, Trash2, Check, TrendingUp, TrendingDown, Maximize2 } from 'lucide-react';
+import { Pencil, Trash2, Check, TrendingUp, TrendingDown, Maximize2, Droplets, Wallet, ExternalLink } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot,
 } from 'recharts';
 import type { SavedChart, ChartConfig, ChartDataPoint } from '@/lib/types';
 import { formatValue, formatAxisTick, formatBlockFull, getChartStats, getYDomain } from '@/lib/pool-data';
+import { usePoolLiquidityMonitor, type LiquidityEvent } from '@/lib/use-pool-liquidity-monitor';
+import { TOKENS } from '@/lib/tokens';
 
 interface ChartCardProps {
   chart: SavedChart;
@@ -48,6 +50,7 @@ const BUCKET_DURATION: Record<string, string> = {
 };
 
 function getChartDescription(metric: string, range: string): string {
+  if (metric === 'Liquidity') return 'Live liquidity adds, removals, and fee collects for this pool';
   const interval = BUCKET_DURATION[range] || range;
   switch (metric) {
     case 'Price':
@@ -164,6 +167,193 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
   );
 }
 
+// ── Liquidity event feed helpers ──────────────────────────────────
+
+const liqEventColors: Record<string, string> = {
+  mint: 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20',
+  burn: 'bg-red-400/10 text-red-400 border-red-400/20',
+  collect: 'bg-amber-400/10 text-amber-400 border-amber-400/20',
+};
+
+const liqEventLabels: Record<string, string> = {
+  mint: 'Add Liquidity',
+  burn: 'Remove Liquidity',
+  collect: 'Collect Fees',
+};
+
+const liqEventIcons: Record<string, typeof TrendingUp> = {
+  mint: TrendingUp,
+  burn: TrendingDown,
+  collect: Wallet,
+};
+
+function truncateAddr(addr: string, chars = 6): string {
+  if (!addr || addr.length <= chars * 2 + 2) return addr || '--';
+  return `${addr.slice(0, chars + 2)}...${addr.slice(-chars)}`;
+}
+
+function liqTimeAgo(iso: string): string {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 24 * 3600) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function formatTokenAmount(raw: string, decimals: number): string {
+  const n = Number(raw) / 10 ** decimals;
+  if (n === 0) return '0';
+  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  if (Math.abs(n) >= 1) return n.toFixed(2);
+  if (Math.abs(n) >= 0.0001) return n.toFixed(4);
+  if (n !== 0) return n.toExponential(2);
+  return '0';
+}
+
+function getPoolTokenInfo(poolName: string): { sym0: string; dec0: number; sym1: string; dec1: number } {
+  const parts = poolName.split('/');
+  const sym0 = parts[0] || '?';
+  const sym1 = parts[1] || '?';
+  const dec0 = TOKENS[sym0]?.decimals ?? 18;
+  const dec1 = TOKENS[sym1]?.decimals ?? 18;
+  return { sym0, dec0, sym1, dec1 };
+}
+
+function LiqEventRow({ event, sym0, dec0, sym1, dec1 }: {
+  event: LiquidityEvent; sym0: string; dec0: number; sym1: string; dec1: number;
+}) {
+  const colorClass = liqEventColors[event.event_type] || 'bg-white/10 text-white/60';
+  const Icon = liqEventIcons[event.event_type] || Droplets;
+  const label = liqEventLabels[event.event_type] || event.event_type;
+
+  const humanAmt0 = formatTokenAmount(event.amount0, dec0);
+  const humanAmt1 = formatTokenAmount(event.amount1, dec1);
+
+  return (
+    <div className="flex items-center gap-2.5 px-4 py-2 border-b border-white/[0.03] text-[11px] transition-colors hover:bg-white/[0.04]">
+      <span className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${colorClass}`}>
+        <Icon className="h-2.5 w-2.5" />
+        {label}
+      </span>
+
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        <span className="text-white/60 font-mono tabular-nums shrink-0">
+          {humanAmt0} <span className="text-white/30">{sym0}</span>
+        </span>
+        <span className="text-white/15">+</span>
+        <span className="text-white/60 font-mono tabular-nums shrink-0">
+          {humanAmt1} <span className="text-white/30">{sym1}</span>
+        </span>
+      </div>
+
+      <a
+        href={`https://sepolia.etherscan.io/tx/${event.tx_hash}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-0.5 text-white/20 hover:text-[#FF007A] font-mono shrink-0 transition-colors"
+      >
+        {truncateAddr(event.tx_hash, 4)}
+        <ExternalLink className="h-2 w-2 opacity-40" />
+      </a>
+
+      <span className="text-white/20 text-[10px] shrink-0 tabular-nums">{liqTimeAgo(event.block_timestamp)}</span>
+    </div>
+  );
+}
+
+function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolName: string }) {
+  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth');
+  const { sym0, dec0, sym1, dec1 } = getPoolTokenInfo(poolName);
+
+  const humanTvl0 = formatTokenAmount(tvl.amount0, dec0);
+  const humanTvl1 = formatTokenAmount(tvl.amount1, dec1);
+  const totalEvents = stats.mints + stats.burns + stats.collects;
+
+  return (
+    <div>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 px-4 py-3 border-b border-white/[0.04]">
+        <div>
+          <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">Adds</div>
+          <div className="text-[15px] font-semibold tabular-nums text-emerald-400">{stats.mints}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">Removes</div>
+          <div className="text-[15px] font-semibold tabular-nums text-red-400">{stats.burns}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">Fee Collects</div>
+          <div className="text-[15px] font-semibold tabular-nums text-amber-400">{stats.collects}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym0} TVL</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70">{humanTvl0}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym1} TVL</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70">{humanTvl1}</div>
+        </div>
+      </div>
+
+      {/* Pool info bar */}
+      <div className="flex items-center justify-between px-4 py-1.5 border-b border-white/[0.04] bg-white/[0.01]">
+        <div className="flex items-center gap-2">
+          <a
+            href={`https://sepolia.etherscan.io/address/${poolAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[10px] text-white/20 hover:text-white/50 font-mono transition-colors"
+          >
+            Pool: {truncateAddr(poolAddress, 5)}
+            <ExternalLink className="h-2 w-2 opacity-40" />
+          </a>
+          <span className="text-[10px] text-white/15">Sepolia</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/20 tabular-nums">{totalEvents} event{totalEvents !== 1 ? 's' : ''}</span>
+          {wsConnected && (
+            <span className="flex items-center gap-1">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              </span>
+              <span className="text-[9px] font-medium text-emerald-400">Polling</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Event feed */}
+      <div className="max-h-[220px] overflow-y-auto">
+        {loading ? (
+          <div className="py-10 text-center">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400 mx-auto mb-2" />
+            <p className="text-[11px] text-white/30">Scanning Sepolia for liquidity events...</p>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="py-10 text-center">
+            <Droplets className="mx-auto h-5 w-5 text-white/10 mb-2" />
+            <p className="text-[11px] text-white/30">No liquidity events found</p>
+            <p className="text-[10px] text-white/15 mt-1">Add or remove liquidity to see events appear here</p>
+          </div>
+        ) : (
+          events.map((evt, i) => (
+            <LiqEventRow
+              key={`${evt.tx_hash}-${evt.event_type}-${i}`}
+              event={evt}
+              sym0={sym0} dec0={dec0} sym1={sym1} dec1={dec1}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main chart card ──────────────────────────────────────────────
+
 export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chart.title);
@@ -230,25 +420,33 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
         </div>
       </div>
 
-      <div className="px-3 pt-2">
-        {chart.data.length === 0 ? (
-          <div className="h-[240px] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
-              <span className="text-[12px] text-white/30">Loading on-chain data...</span>
-            </div>
-          </div>
-        ) : (
-          <RenderChart config={config} data={chart.data} chartId={chart.id} />
-        )}
-      </div>
-
-      {chart.data.length > 0 && (
-        <div className="flex items-center gap-8 border-t border-white/[0.06] mx-5 py-3.5 text-[12px]">
-          <Stat label="Latest bucket" value={formatValue(stats.current, config.metric)} />
-          <Stat label={`${config.range} change`} value={`${stats.change24h >= 0 ? '+' : ''}${stats.change24h.toFixed(2)}%`} positive={stats.change24h >= 0} showIcon />
-          <Stat label="Peak bucket" value={formatValue(stats.peak, config.metric)} />
+      {config.metric === 'Liquidity' && config.poolAddress ? (
+        <div className="pt-1">
+          <LiquidityFeed poolAddress={config.poolAddress} poolName={config.pool} />
         </div>
+      ) : (
+        <>
+          <div className="px-3 pt-2">
+            {chart.data.length === 0 ? (
+              <div className="h-[240px] flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
+                  <span className="text-[12px] text-white/30">Loading on-chain data...</span>
+                </div>
+              </div>
+            ) : (
+              <RenderChart config={config} data={chart.data} chartId={chart.id} />
+            )}
+          </div>
+
+          {chart.data.length > 0 && (
+            <div className="flex items-center gap-8 border-t border-white/[0.06] mx-5 py-3.5 text-[12px]">
+              <Stat label="Latest bucket" value={formatValue(stats.current, config.metric, config.chain)} />
+              <Stat label={`${config.range} change`} value={`${stats.change24h >= 0 ? '+' : ''}${stats.change24h.toFixed(2)}%`} positive={stats.change24h >= 0} showIcon />
+              <Stat label="Peak bucket" value={formatValue(stats.peak, config.metric, config.chain)} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

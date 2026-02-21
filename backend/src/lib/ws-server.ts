@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { tracker, type SwapRecord } from './pool-tracker.js';
+import { monadTracker, type MonadSwapRecord } from './monad-tracker.js';
 import { log } from './log.js';
 
 interface ClientState {
@@ -30,7 +31,11 @@ export function setupWebSocket(server: Server) {
         if (msg.type === 'subscribe' && Array.isArray(msg.pools)) {
           for (const pool of msg.pools) {
             state.pools.add(pool);
-            await tracker.track(pool);
+            if (pool.startsWith('0x') && pool.length === 42) {
+              await monadTracker.track(pool);
+            } else {
+              await tracker.track(pool);
+            }
           }
           ws.send(JSON.stringify({ type: 'subscribed', pools: Array.from(state.pools) }));
           log('ws', `Client subscribed to [${Array.from(state.pools).join(', ')}]`);
@@ -73,6 +78,30 @@ export function setupWebSocket(server: Server) {
     }
     if (sent > 0) {
       log('ws', `Broadcast swap ${swap.pool} $${swap.price.toLocaleString()} (vol $${swap.volumeUSD.toFixed(2)}) → ${sent} client(s)`);
+    }
+  });
+
+  monadTracker.on('swap', (swap: MonadSwapRecord) => {
+    const normalized = {
+      type: 'swap',
+      pool: swap.token,
+      price: swap.price,
+      volumeUSD: swap.volumeMON,
+      feeUSD: 0,
+      txHash: swap.txHash,
+      blockNumber: swap.blockNumber,
+      timestamp: swap.timestamp,
+    };
+    const msg = JSON.stringify(normalized);
+    let sent = 0;
+    for (const [ws, state] of clients) {
+      if (state.pools.has(swap.token) && ws.readyState === WebSocket.OPEN) {
+        ws.send(msg);
+        sent++;
+      }
+    }
+    if (sent > 0) {
+      log('ws', `Broadcast monad swap ${swap.token.slice(0, 10)}... price=${swap.price.toFixed(6)} vol=${swap.volumeMON.toFixed(2)} MON → ${sent} client(s)`);
     }
   });
 

@@ -47,32 +47,33 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
   return (
     <div
       ref={setNodeRef}
+      data-block-category={block.category}
       style={{ ...style, boxShadow: glass.shadow }}
       className={cn(
-        'group relative rounded-2xl border backdrop-blur-xl transition-all duration-200',
+        'group relative rounded-2xl border backdrop-blur-xl transition-all duration-200 overflow-hidden',
         glass.className,
         isDragging && 'z-50 opacity-90 scale-[1.02]',
         !isDragging && 'hover:bg-white/[0.06]'
       )}
     >
-      <div className="flex items-start gap-3 p-4">
+      <div className="flex items-start gap-2 p-3">
         <div {...attributes} {...listeners}
           className="mt-0.5 cursor-grab rounded-md p-0.5 text-white/15 hover:text-white/30 hover:bg-white/[0.06] active:cursor-grabbing transition-colors">
-          <GripVertical className="h-4 w-4" />
+          <GripVertical className="h-3.5 w-3.5" />
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-3">
-            <span className={cn('h-2 w-2 rounded-full shrink-0', meta.dotColor)} style={{ boxShadow: `0 0 6px ${meta.glow}` }} />
-            <span className={cn('text-[10px] font-bold uppercase tracking-[0.08em]', meta.color)}>{meta.tagLabel}</span>
-            <span className="text-[13px] font-semibold text-white/80">{block.type}</span>
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', meta.dotColor)} style={{ boxShadow: `0 0 6px ${meta.glow}` }} />
+            <span className={cn('text-[9px] font-bold uppercase tracking-[0.08em]', meta.color)}>{meta.tagLabel}</span>
+            <span className="text-[12px] font-semibold text-white/80 truncate">{block.type}</span>
           </div>
           <BlockConfig block={block} updateField={updateField} poolTokens={poolTokens} />
         </div>
 
         <button onClick={() => onRemove(block.id)}
-          className="rounded-lg p-1 text-white/15 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100">
-          <X className="h-3.5 w-3.5" />
+          className="rounded-lg p-0.5 text-white/15 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100">
+          <X className="h-3 w-3" />
         </button>
       </div>
     </div>
@@ -81,26 +82,42 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
 
 function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void; poolTokens?: string[] }) {
   if (block.category === 'trigger') {
+    const chain = String(block.config.chain || 'eth');
     return (
-      <PoolInput
-        value={String(block.config.pool || 'WETH/USDC')}
-        onChange={pool => updateField('pool', pool)}
-        inputClassName="h-8"
-      />
+      <div className="flex flex-col gap-1.5">
+        <Select value={chain} onValueChange={v => updateField('chain', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="eth">Ethereum</SelectItem>
+            <SelectItem value="monad">Monad</SelectItem>
+          </SelectContent>
+        </Select>
+        {chain === 'monad' ? (
+          <Input
+            value={String(block.config.pool || '')}
+            onChange={e => updateField('pool', e.target.value.trim())}
+            placeholder="0x... token address"
+            className={INPUT_CLASS}
+          />
+        ) : (
+          <PoolInput
+            value={String(block.config.pool || 'WETH/USDC')}
+            onChange={pool => updateField('pool', pool)}
+            inputClassName="h-8"
+          />
+        )}
+      </div>
     );
   }
 
   if (block.category === 'condition') {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-white/30 shrink-0">Price</span>
+      <div className="flex flex-col gap-1.5">
         <Select value={String(block.config.operator || '>')} onValueChange={v => updateField('operator', v)}>
-          <SelectTrigger className={cn(INPUT_CLASS, 'w-[100px]')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
           <SelectContent position="popper">
             <SelectItem value=">">above</SelectItem>
             <SelectItem value="<">below</SelectItem>
-            <SelectItem value=">=">at or above</SelectItem>
-            <SelectItem value="<=">at or below</SelectItem>
           </SelectContent>
         </Select>
         <div className="relative">
@@ -110,7 +127,7 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
             value={String(block.config.value || '')}
             onChange={e => updateField('value', e.target.value)}
             placeholder="0.00"
-            className={cn(INPUT_CLASS, 'w-[120px] pl-6')}
+            className={cn(INPUT_CLASS, 'w-full pl-6')}
           />
         </div>
       </div>
@@ -120,10 +137,9 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
   if (block.type === 'Recommend Swap') {
     const tokens = poolTokens && poolTokens.length > 0 ? poolTokens : ['Token A', 'Token B'];
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-white/30 shrink-0">Swap into</span>
+      <div className="flex flex-col gap-1.5">
         <Select value={String(block.config.token || '')} onValueChange={v => updateField('token', v)}>
-          <SelectTrigger className={cn(INPUT_CLASS, 'w-[100px]')} size="sm">
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm">
             <SelectValue placeholder="Token" />
           </SelectTrigger>
           <SelectContent position="popper">
@@ -137,7 +153,71 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
             value={String(block.config.amount || '')}
             onChange={e => updateField('amount', e.target.value)}
             placeholder="Amount"
-            className={cn(INPUT_CLASS, 'w-[110px] pl-6')}
+            className={cn(INPUT_CLASS, 'w-full pl-6')}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'Add Liquidity') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
+          <Input
+            type="number"
+            value={String(block.config.amount || '')}
+            onChange={e => updateField('amount', e.target.value)}
+            placeholder="Amount"
+            className={cn(INPUT_CLASS, 'w-full pl-6')}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            value={String(block.config.rangeLow || '')}
+            onChange={e => updateField('rangeLow', e.target.value)}
+            placeholder="Low"
+            className={cn(INPUT_CLASS, 'flex-1 min-w-0')}
+          />
+          <span className="text-[10px] text-white/20 shrink-0">–</span>
+          <Input
+            type="number"
+            value={String(block.config.rangeHigh || '')}
+            onChange={e => updateField('rangeHigh', e.target.value)}
+            placeholder="High"
+            className={cn(INPUT_CLASS, 'flex-1 min-w-0')}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'Remove Liquidity') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <div className="relative flex-1 min-w-0">
+            <Input
+              type="number"
+              value={String(block.config.percent || '')}
+              onChange={e => updateField('percent', e.target.value)}
+              placeholder="100"
+              className={cn(INPUT_CLASS, 'w-full pr-6')}
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-white/30">%</span>
+          </div>
+          <span className="text-[10px] text-white/20 shrink-0">of position</span>
+        </div>
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
+          <Input
+            type="number"
+            value={String(block.config.amount || '')}
+            onChange={e => updateField('amount', e.target.value)}
+            placeholder="Amount"
+            className={cn(INPUT_CLASS, 'w-full pl-6')}
           />
         </div>
       </div>

@@ -18,7 +18,7 @@ router.get('/rules', async (_req, res) => {
     id: row.id,
     name: row.name,
     enabled: row.enabled,
-    trigger: { type: 'Swap', pool: row.pool },
+    trigger: { type: 'Swap', pool: row.pool, chain: row.chain || 'eth' },
     conditions: row.conditions,
     actions: row.actions,
     createdAt: new Date(row.created_at).getTime(),
@@ -47,6 +47,7 @@ router.post('/rules', async (req, res) => {
     name: name || 'Untitled Rule',
     enabled: enabled ?? true,
     pool: trigger.pool,
+    chain: trigger.chain || 'eth',
     conditions: conditions || [],
     actions: actions || [],
   }, { onConflict: 'id' });
@@ -68,6 +69,7 @@ router.patch('/rules/:id', async (req, res) => {
   if (req.body.name !== undefined) updates.name = req.body.name;
   if (req.body.enabled !== undefined) updates.enabled = req.body.enabled;
   if (req.body.trigger?.pool !== undefined) updates.pool = req.body.trigger.pool;
+  if (req.body.trigger?.chain !== undefined) updates.chain = req.body.trigger.chain;
   if (req.body.conditions !== undefined) updates.conditions = req.body.conditions;
   if (req.body.actions !== undefined) updates.actions = req.body.actions;
 

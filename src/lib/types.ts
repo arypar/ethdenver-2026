@@ -1,4 +1,5 @@
-export type Metric = 'Price' | 'Volume' | 'Fees' | 'Swap Count';
+export type ChainId = 'eth' | 'monad';
+export type Metric = 'Price' | 'Volume' | 'Fees' | 'Swap Count' | 'Liquidity';
 export type Pool = string;
 export type TimeRange = '1H' | '24H' | '7D' | '30D';
 export type ChartType = 'line' | 'area' | 'bar';
@@ -8,6 +9,8 @@ export interface ChartConfig {
   pool: Pool;
   range: TimeRange;
   chartType: ChartType;
+  chain?: ChainId;
+  poolAddress?: string;
 }
 
 export interface SavedChart {
@@ -29,7 +32,7 @@ export type TriggerType = 'Swap';
 export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Swap Direction' | 'Count in Window';
 export type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
 export type WindowSize = '1m' | '5m' | '15m' | '1h';
-export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap';
+export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap' | 'Add Liquidity' | 'Remove Liquidity';
 
 export interface RuleCondition {
   id: string;
@@ -57,6 +60,7 @@ export interface Rule {
   trigger: {
     type: TriggerType;
     pool: Pool;
+    chain?: ChainId;
     watchedWallet?: string;
   };
   conditions: RuleCondition[];

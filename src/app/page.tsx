@@ -11,12 +11,13 @@ import { ActionsInbox } from '@/components/actions/ActionsInbox';
 import { useSavedCharts, useRules, useActions } from '@/lib/store';
 
 export default function Home() {
-  const [tab, setTab] = useState<TabId>('Intelligence');
+  const [tab, setTab] = useState<TabId>('Intelligence (ETH)');
 
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
 
-  const { charts, add: addChart, rename: renameChart, remove: removeChart, appendDataPoint, accumulateDataPoint } = useSavedCharts();
+  const ethCharts = useSavedCharts('eth');
+  const monadCharts = useSavedCharts('monad');
   const { rules, addRule, updateRule, removeRule, duplicateRule } = useRules();
   const { actions, updateStatus, clearAll: clearActions } = useActions();
 
@@ -42,14 +43,26 @@ export default function Home() {
         </TopBar>
 
         <main className="mx-auto max-w-6xl px-6 py-10">
-          {tab === 'Intelligence' && (
+          {tab === 'Intelligence (ETH)' && (
             <IntelligenceTab
-              charts={charts}
-              onAddChart={addChart}
-              onRenameChart={renameChart}
-              onRemoveChart={removeChart}
-              onAppendDataPoint={appendDataPoint}
-              onAccumulateDataPoint={accumulateDataPoint}
+              chain="eth"
+              charts={ethCharts.charts}
+              onAddChart={ethCharts.add}
+              onRenameChart={ethCharts.rename}
+              onRemoveChart={ethCharts.remove}
+              onAppendDataPoint={ethCharts.appendDataPoint}
+              onAccumulateDataPoint={ethCharts.accumulateDataPoint}
+            />
+          )}
+          {tab === 'Intelligence (Monad)' && (
+            <IntelligenceTab
+              chain="monad"
+              charts={monadCharts.charts}
+              onAddChart={monadCharts.add}
+              onRenameChart={monadCharts.rename}
+              onRemoveChart={monadCharts.remove}
+              onAppendDataPoint={monadCharts.appendDataPoint}
+              onAccumulateDataPoint={monadCharts.accumulateDataPoint}
             />
           )}
           {tab === 'Rules Builder' && (

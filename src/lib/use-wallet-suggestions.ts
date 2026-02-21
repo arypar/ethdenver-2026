@@ -13,6 +13,8 @@ import {
 const V3_POSITION_MANAGER: Address = '0x1238536071E1c677A632429e3655c799b22cDA52';
 // V4 PositionManager on Sepolia (official)
 const V4_POSITION_MANAGER: Address = '0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4';
+// V3 Factory on Sepolia
+const V3_FACTORY: Address = '0x0227628f3F023bb0B980b67D528571c95c6DaC1c';
 
 const MAX_POSITIONS = 20;
 
@@ -59,28 +61,30 @@ const v3PositionsAbi = [
   },
 ] as const;
 
-export interface LpPositionData {
-  version: 'v3' | 'v4';
-  tokenId: string;
-  token0: string;
-  token1: string;
-  token0Symbol: string;
-  token1Symbol: string;
-  feeTier: number;
-  tickLower: number;
-  tickUpper: number;
-  liquidity: string;
-  tokensOwed0?: string;
-  tokensOwed1?: string;
-  poolAddress?: string;
-}
+const v3FactoryAbi = [
+  {
+    name: 'getPool',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ name: 'pool', type: 'address' }],
+  },
+] as const;
 
 export interface PoolSuggestion {
   pool: string;
   reason: 'lp' | 'holding';
   token?: string;
   chain: 'eth' | 'monad';
-  lpData?: LpPositionData;
+  version?: 'v3' | 'v4';
+  feeTier?: number;
+  token0Symbol?: string;
+  token1Symbol?: string;
+  poolAddress?: string;
 }
 
 export function useWalletSuggestions() {
@@ -137,35 +141,59 @@ export function useWalletSuggestions() {
           }));
           const positionResults = await publicClient.multicall({ contracts: positionCalls });
 
+          const pendingFactoryCalls: Array<{
+            poolName: string; sym0: string; sym1: string; fee: number;
+            token0Addr: Address; token1Addr: Address;
+          }> = [];
+
           for (let idx = 0; idx < positionResults.length; idx++) {
             const res = positionResults[idx];
             if (res.status !== 'success' || !Array.isArray(res.result)) continue;
-            const [, , token0Addr, token1Addr, fee, tickLower, tickUpper, liquidity,,, tokensOwed0, tokensOwed1] = res.result as [
+            const [, , token0Addr, token1Addr, fee] = res.result as [
               bigint, Address, Address, Address, number, number, number, bigint,
               bigint, bigint, bigint, bigint,
             ];
             const sym0 = symbolFromAddress(token0Addr) ?? shortAddr(token0Addr);
             const sym1 = symbolFromAddress(token1Addr) ?? shortAddr(token1Addr);
             const poolName = `${sym0}/${sym1}`;
-            const tokenId = validTokenIds[idx];
 
-            const lpData: LpPositionData = {
-              version: 'v3',
-              tokenId: tokenId.toString(),
-              token0: token0Addr,
-              token1: token1Addr,
-              token0Symbol: sym0,
-              token1Symbol: sym1,
-              feeTier: Number(fee),
-              tickLower: Number(tickLower),
-              tickUpper: Number(tickUpper),
-              liquidity: liquidity.toString(),
-              tokensOwed0: tokensOwed0.toString(),
-              tokensOwed1: tokensOwed1.toString(),
-            };
+            if (!lpPools.has(poolName)) {
+              lpPools.add(poolName);
+              pendingFactoryCalls.push({ poolName, sym0, sym1, fee: Number(fee), token0Addr, token1Addr });
+            }
+          }
 
-            results.push({ pool: poolName, reason: 'lp', chain: 'eth', lpData });
-            lpPools.add(poolName);
+          if (pendingFactoryCalls.length > 0) {
+            const factoryCalls = pendingFactoryCalls.map(p => ({
+              address: V3_FACTORY,
+              abi: v3FactoryAbi,
+              functionName: 'getPool' as const,
+              args: [p.token0Addr, p.token1Addr, p.fee] as const,
+            }));
+            const factoryResults = await publicClient.multicall({ contracts: factoryCalls });
+
+            for (let i = 0; i < pendingFactoryCalls.length; i++) {
+              const p = pendingFactoryCalls[i];
+              let poolAddr: string | undefined;
+              const fRes = factoryResults[i];
+              if (fRes.status === 'success' && fRes.result) {
+                const addr = fRes.result as Address;
+                if (addr !== '0x0000000000000000000000000000000000000000') {
+                  poolAddr = addr.toLowerCase();
+                }
+              }
+              console.log(`[WalletSuggestions] V3 pool ${p.poolName} → ${poolAddr || 'not found'}`);
+              results.push({
+                pool: p.poolName,
+                reason: 'lp',
+                chain: 'eth',
+                version: 'v3',
+                feeTier: p.fee,
+                token0Symbol: p.sym0,
+                token1Symbol: p.sym1,
+                poolAddress: poolAddr,
+              });
+            }
           }
         }
       }
@@ -200,20 +228,10 @@ export function useWalletSuggestions() {
 
         for (const tokenId of validTokenIds) {
           const poolName = `V4-Pool-${tokenId.toString().slice(0, 8)}`;
-          const lpData: LpPositionData = {
-            version: 'v4',
-            tokenId: tokenId.toString(),
-            token0: '',
-            token1: '',
-            token0Symbol: '?',
-            token1Symbol: '?',
-            feeTier: 0,
-            tickLower: 0,
-            tickUpper: 0,
-            liquidity: '0',
-          };
-          results.push({ pool: poolName, reason: 'lp', chain: 'eth', lpData });
-          lpPools.add(poolName);
+          if (!lpPools.has(poolName)) {
+            lpPools.add(poolName);
+            results.push({ pool: poolName, reason: 'lp', chain: 'eth', version: 'v4' });
+          }
         }
       }
     } catch (err) {

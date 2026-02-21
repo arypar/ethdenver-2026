@@ -20,6 +20,8 @@ export const PALETTE_ITEMS: PaletteItem[] = [
 
   { type: 'Create Alert', category: 'action', label: 'Create Alert' },
   { type: 'Recommend Swap', category: 'action', label: 'Recommend Swap' },
+  { type: 'Add Liquidity', category: 'action', label: 'Add Liquidity' },
+  { type: 'Remove Liquidity', category: 'action', label: 'Remove Liquidity' },
 ];
 
 export const CATEGORY_META: Record<BlockCategory, { label: string; tagLabel: string; color: string; bg: string; border: string; dotColor: string; glow: string }> = {
@@ -52,13 +54,55 @@ export const CATEGORY_META: Record<BlockCategory, { label: string; tagLabel: str
   },
 };
 
+export function getBlockError(block: CanvasBlock): string | null {
+  if (block.category === 'trigger') {
+    const pool = String(block.config.pool || '').trim();
+    const chain = String(block.config.chain || 'eth');
+    if (chain === 'monad') {
+      if (!pool.match(/^0x[a-fA-F0-9]{40}$/)) return 'Enter a valid token address';
+    } else {
+      if (!pool || !pool.includes('/')) return 'Select a valid pool pair';
+    }
+    return null;
+  }
+  if (block.category === 'condition') {
+    const val = String(block.config.value || '').trim();
+    if (!val || isNaN(Number(val)) || Number(val) === 0) return 'Enter a price value';
+    return null;
+  }
+  if (block.type === 'Recommend Swap') {
+    const token = String(block.config.token || '').trim();
+    const amount = String(block.config.amount || '').trim();
+    if (!token) return 'Select a token';
+    if (!amount || isNaN(Number(amount))) return 'Enter an amount';
+    return null;
+  }
+  if (block.type === 'Add Liquidity' || block.type === 'Remove Liquidity') {
+    const amount = String(block.config.amount || '').trim();
+    if (!amount || isNaN(Number(amount))) return 'Enter an amount';
+    const rangeLow = String(block.config.rangeLow || '').trim();
+    const rangeHigh = String(block.config.rangeHigh || '').trim();
+    if (block.type === 'Add Liquidity' && (!rangeLow || !rangeHigh)) return 'Set price range';
+    if (block.type === 'Remove Liquidity') {
+      const percent = String(block.config.percent || '').trim();
+      if (!percent || isNaN(Number(percent)) || Number(percent) <= 0 || Number(percent) > 100) return 'Enter a valid % (1–100)';
+    }
+    return null;
+  }
+  const message = String(block.config.message || '').trim();
+  if (!message) return 'Enter an alert message';
+  return null;
+}
+
 export function createDefaultConfig(category: BlockCategory, type: string): Record<string, string | number> {
   if (category === 'trigger') {
-    return { pool: 'WETH/USDC' };
+    return { pool: 'WETH/USDC', chain: 'eth' };
   }
   if (category === 'condition') {
     return { operator: '>', value: '' };
   }
   if (type === 'Recommend Swap') return { token: '', amount: '' };
+  if (type === 'Add Liquidity') return { amount: '', rangeLow: '', rangeHigh: '' };
+  if (type === 'Remove Liquidity') return { percent: '100', amount: '' };
   return { message: '' };
 }

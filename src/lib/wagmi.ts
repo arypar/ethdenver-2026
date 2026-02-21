@@ -16,7 +16,7 @@ export const monad = defineChain({
 });
 
 export const config = getDefaultConfig({
-  appName: 'UniSignal',
+  appName: 'Chaintology',
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo',
   chains: [sepolia, monad],
   transports: {

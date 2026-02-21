@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import type { Rule, SavedChart, ActionItem, ActionStatus } from './types';
+import type { ChainId, Rule, SavedChart, ActionItem, ActionStatus } from './types';
 import { fetchChartData } from './pool-data';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -59,18 +59,20 @@ interface DbChart {
     pool: string;
     range: string;
     chartType: string;
+    chain?: string;
+    poolAddress?: string;
   };
   createdAt: number;
 }
 
-export function useSavedCharts() {
+export function useSavedCharts(chain: ChainId = 'eth') {
   const [charts, setCharts] = useState<SavedChart[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const dbCharts = await apiGet<DbChart[]>('/api/charts');
+      const dbCharts = await apiGet<DbChart[]>(`/api/charts?chain=${chain}`);
 
       if (cancelled) return;
 
@@ -86,6 +88,8 @@ export function useSavedCharts() {
           pool: c.config.pool,
           range: c.config.range as SavedChart['config']['range'],
           chartType: (c.config.chartType || 'area') as SavedChart['config']['chartType'],
+          chain: (c.config.chain || chain) as ChainId,
+          ...(c.config.poolAddress ? { poolAddress: c.config.poolAddress } : {}),
         },
         data: [],
         createdAt: c.createdAt,
@@ -94,7 +98,8 @@ export function useSavedCharts() {
       setCharts(withEmptyData);
 
       for (const chart of withEmptyData) {
-        fetchChartData(chart.config.metric, chart.config.pool, chart.config.range)
+        if (chart.config.metric === 'Liquidity') continue;
+        fetchChartData(chart.config.metric, chart.config.pool, chart.config.range, chain)
           .then(data => {
             if (cancelled) return;
             setCharts(prev => prev.map(c => c.id === chart.id ? { ...c, data } : c));
@@ -104,12 +109,12 @@ export function useSavedCharts() {
     })();
 
     return () => { cancelled = true; };
-  }, []);
+  }, [chain]);
 
   const add = useCallback((chart: SavedChart) => {
     setCharts(prev => [chart, ...prev]);
-    apiPost('/api/charts', { id: chart.id, title: chart.title, config: chart.config });
-  }, []);
+    apiPost('/api/charts', { id: chart.id, title: chart.title, config: { ...chart.config, chain } });
+  }, [chain]);
 
   const rename = useCallback((id: string, title: string) => {
     setCharts(prev => prev.map(c => c.id === id ? { ...c, title } : c));
@@ -133,13 +138,14 @@ export function useSavedCharts() {
     });
   }, []);
 
-  const accumulateDataPoint = useCallback((id: string, delta: number) => {
+  const accumulateDataPoint = useCallback((id: string, delta: number, block?: number) => {
     setCharts(prev => {
       return prev.map(c => {
         if (c.id !== id || c.data.length === 0) return c;
         const data = [...c.data];
         const last = { ...data[data.length - 1] };
         last.value = Math.round((last.value + delta) * 100) / 100;
+        if (block != null) last.block = block;
         data[data.length - 1] = last;
         return { ...c, data };
       });

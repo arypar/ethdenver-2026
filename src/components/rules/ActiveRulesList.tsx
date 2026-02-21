@@ -17,18 +17,20 @@ interface ActiveRulesListProps {
 
 export function ActiveRulesList({ rules, onToggle, onEdit, onDuplicate, onDelete, onSimulate }: ActiveRulesListProps) {
   return (
-    <div className="relative rounded-2xl border border-white/[0.06] overflow-hidden"
+    <div
+      className="rounded-2xl border border-white/[0.06] overflow-hidden"
       style={{
         background: `
-          radial-gradient(ellipse at 20% 0%, rgba(255,0,122,0.04), transparent 50%),
-          radial-gradient(ellipse at 80% 100%, rgba(99,102,241,0.04), transparent 50%),
-          rgba(8,8,15,0.5)
+          radial-gradient(ellipse at 20% 0%, rgba(255,0,122,0.03), transparent 50%),
+          radial-gradient(ellipse at 80% 100%, rgba(99,102,241,0.03), transparent 50%),
+          rgba(8,8,15,0.4)
         `,
-      }}>
-      <div className="px-6 pt-6 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">Active Rules</h3>
-          <span className="inline-flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] px-2.5 py-0.5 text-[11px] font-medium text-white/40 tabular-nums">
+      }}
+    >
+      <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-white/90">Active Rules</h3>
+          <span className="inline-flex items-center rounded-full bg-white/[0.05] border border-white/[0.08] px-2 py-0.5 text-[11px] font-medium text-white/35 tabular-nums">
             {rules.length}
           </span>
         </div>
@@ -40,24 +42,20 @@ export function ActiveRulesList({ rules, onToggle, onEdit, onDuplicate, onDelete
         )}
       </div>
 
-      <div className="h-px w-full animate-shimmer" />
+      <div className="h-px w-full bg-white/[0.04]" />
 
       {rules.length === 0 ? (
-        <div className="flex flex-col items-center py-20 text-center px-6">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-2xl bg-white/[0.02]"
-              style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.03) 0.5px, transparent 0.5px)', backgroundSize: '12px 12px' }} />
-            <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl">
-              <ShieldCheck className="h-7 w-7 text-white/10" />
-            </div>
+        <div className="flex flex-col items-center py-12 text-center px-6">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03]">
+            <ShieldCheck className="h-5 w-5 text-white/12" />
           </div>
-          <p className="mt-5 text-[14px] font-medium text-white/50">No rules configured</p>
-          <p className="mt-1.5 max-w-[300px] text-[12px] text-white/20 leading-relaxed">
+          <p className="mt-3 text-[13px] font-medium text-white/45">No rules configured</p>
+          <p className="mt-1 max-w-[280px] text-[11px] text-white/20 leading-relaxed">
             Build your first rule above by dragging blocks onto the canvas, then activate it.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 px-4 pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 p-3">
           {rules.map(rule => (
             <RuleCard key={rule.id} rule={rule} onToggle={onToggle} onEdit={onEdit} onDuplicate={onDuplicate} onDelete={onDelete} onSimulate={onSimulate} />
           ))}
@@ -79,23 +77,28 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete, onSimulate }:
     <div className={cn(
       'group relative rounded-xl border backdrop-blur-xl transition-all duration-200',
       rule.enabled
-        ? 'border-white/[0.1] bg-white/[0.04] hover:bg-white/[0.06] hover:border-white/[0.14]'
-        : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] opacity-70 hover:opacity-100'
+        ? 'border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] hover:border-white/[0.12]'
+        : 'border-white/[0.04] bg-white/[0.015] hover:bg-white/[0.03] opacity-60 hover:opacity-100'
     )}>
-      <div className="p-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2.5">
+      <div className="p-3.5 flex flex-col gap-2.5">
+        <div className="flex items-center gap-2">
           <span className={cn(
-            'h-2 w-2 rounded-full shrink-0 transition-colors',
+            'h-1.5 w-1.5 rounded-full shrink-0 transition-colors',
             rule.enabled ? 'bg-emerald-400 animate-pulse-glow' : 'bg-white/15'
           )} style={rule.enabled ? { color: 'rgba(52,211,153,0.4)' } : undefined} />
-          <span className="text-[14px] font-semibold text-white/90 truncate flex-1">{rule.name}</span>
+          <span className="text-[13px] font-semibold text-white/85 truncate flex-1">{rule.name}</span>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          <TagPill color="rose" label={rule.trigger.pool} />
+          {rule.trigger.chain === 'monad' && (
+            <span className="inline-flex items-center rounded-md border border-purple-500/20 bg-purple-500/[0.08] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-purple-300/80">
+              Monad
+            </span>
+          )}
+          <TagPill color="rose" label={rule.trigger.chain === 'monad' ? `${rule.trigger.pool.slice(0, 6)}...${rule.trigger.pool.slice(-4)}` : rule.trigger.pool} />
           {rule.conditions.length > 0 && (
             <>
-              <ArrowRight className="h-2.5 w-2.5 text-white/15 shrink-0" />
+              <ArrowRight className="h-2.5 w-2.5 text-white/12 shrink-0" />
               {rule.conditions.map(c => (
                 <TagPill key={c.id} color="indigo" label={`price ${c.operator} $${c.value}`} />
               ))}
@@ -103,7 +106,7 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete, onSimulate }:
           )}
           {rule.actions.length > 0 && (
             <>
-              <ArrowRight className="h-2.5 w-2.5 text-white/15 shrink-0" />
+              <ArrowRight className="h-2.5 w-2.5 text-white/12 shrink-0" />
               {rule.actions.map(a => (
                 <TagPill key={a.id} color="emerald" label={a.type} />
               ))}
@@ -111,7 +114,7 @@ function RuleCard({ rule, onToggle, onEdit, onDuplicate, onDelete, onSimulate }:
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-1 border-t border-white/[0.05]">
+        <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
           <Switch checked={rule.enabled} onCheckedChange={v => onToggle(rule.id, v)} />
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
             <Button variant="ghost" size="icon-xs" onClick={() => onSimulate(rule)} className="text-white/20 hover:text-white/60 hover:bg-white/[0.06]"><Zap className="h-3 w-3" /></Button>

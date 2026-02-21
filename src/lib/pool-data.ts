@@ -1,4 +1,4 @@
-import type { ChartDataPoint, Metric, Pool, TimeRange } from './types';
+import type { ChartDataPoint, ChainId, Metric, Pool, TimeRange } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -6,11 +6,17 @@ export async function fetchChartData(
   metric: Metric,
   pool: Pool,
   range: TimeRange,
+  chain: ChainId = 'eth',
 ): Promise<ChartDataPoint[]> {
-  const res = await fetch(`${API_BASE}/uniswap/chart-data`, {
+  const endpoint = chain === 'monad' ? '/monad/chart-data' : '/uniswap/chart-data';
+  const body = chain === 'monad'
+    ? { token: pool, metric, range }
+    : { pool, metric, range };
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pool, metric, range }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -21,19 +27,23 @@ export async function fetchChartData(
   return res.json();
 }
 
-export function formatValue(value: number, metric: Metric): string {
+export function formatValue(value: number, metric: Metric, chain: ChainId = 'eth'): string {
   if (metric === 'Price') {
-    if (value >= 10_000) return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-    if (value >= 1) return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (value >= 0.001) return `$${value.toFixed(4)}`;
-    return `$${value.toFixed(6)}`;
+    const prefix = chain === 'monad' ? '' : '$';
+    const suffix = chain === 'monad' ? ' MON' : '';
+    if (value >= 10_000) return `${prefix}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}${suffix}`;
+    if (value >= 1) return `${prefix}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${suffix}`;
+    if (value >= 0.001) return `${prefix}${value.toFixed(4)}${suffix}`;
+    return `${prefix}${value.toFixed(6)}${suffix}`;
   }
 
   if (metric === 'Volume' || metric === 'Fees') {
-    if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-    if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-    if (Math.abs(value) >= 1) return `$${value.toFixed(2)}`;
-    return `$${value.toFixed(4)}`;
+    const prefix = chain === 'monad' ? '' : '$';
+    const suffix = chain === 'monad' ? ' MON' : '';
+    if (Math.abs(value) >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(2)}M${suffix}`;
+    if (Math.abs(value) >= 1_000) return `${prefix}${(value / 1_000).toFixed(1)}K${suffix}`;
+    if (Math.abs(value) >= 1) return `${prefix}${value.toFixed(2)}${suffix}`;
+    return `${prefix}${value.toFixed(4)}${suffix}`;
   }
 
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;

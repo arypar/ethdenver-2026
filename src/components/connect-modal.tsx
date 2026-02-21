@@ -29,7 +29,7 @@ export function ConnectModal({ open, onClose, onConnect, message }: ConnectModal
             Connect Wallet
           </DialogTitle>
           <DialogDescription className="text-uni-text1">
-            {message || 'Connect your wallet to unlock all UniSignal features.'}
+            {message || 'Connect your wallet to unlock all Chaintology features.'}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 pt-4">

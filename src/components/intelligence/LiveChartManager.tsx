@@ -3,12 +3,13 @@
 import { useMemo, useRef } from 'react';
 import { usePoolStream, metricFromSwap, type SwapEvent } from '@/lib/use-pool-stream';
 import { formatBlock } from '@/lib/pool-data';
-import type { SavedChart, Pool, ChartDataPoint } from '@/lib/types';
+import type { ChainId, SavedChart, Pool, ChartDataPoint } from '@/lib/types';
 
 interface LiveChartManagerProps {
   charts: SavedChart[];
+  chain?: ChainId;
   onAppendDataPoint: (chartId: string, point: ChartDataPoint) => void;
-  onAccumulateDataPoint: (chartId: string, delta: number) => void;
+  onAccumulateDataPoint: (chartId: string, delta: number, block?: number) => void;
 }
 
 const AGGREGATE_METRICS = new Set(['Volume', 'Fees', 'Swap Count']);
@@ -22,7 +23,7 @@ function PoolListener({
   pool: Pool;
   charts: SavedChart[];
   onAppendDataPoint: (chartId: string, point: ChartDataPoint) => void;
-  onAccumulateDataPoint: (chartId: string, delta: number) => void;
+  onAccumulateDataPoint: (chartId: string, delta: number, block?: number) => void;
 }) {
   const chartsRef = useRef(charts);
   chartsRef.current = charts;
@@ -40,11 +41,11 @@ function PoolListener({
       if (value === 0) continue;
 
       if (AGGREGATE_METRICS.has(chart.config.metric)) {
-        accumulateRef.current(chart.id, value);
+        accumulateRef.current(chart.id, value, swap.blockNumber);
       } else {
         appendRef.current(chart.id, {
           time: blockLabel,
-          value: Math.round(value * 100) / 100,
+          value: Math.round(value * 1e6) / 1e6,
           block: swap.blockNumber,
         });
       }

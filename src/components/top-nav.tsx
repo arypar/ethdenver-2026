@@ -24,7 +24,7 @@ export function TopNav({ activeTab, onTabChange, connected, address, onConnect, 
         <div className="flex items-center gap-2.5">
           <UniLogo />
           <span className="text-lg font-bold tracking-tight text-uni-text0">
-            Uni<span className="text-gradient-primary">Signal</span>
+            Chain<span className="text-gradient-primary">tology</span>
           </span>
         </div>
 

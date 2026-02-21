@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 
-const TABS = ['Intelligence', 'Rules Builder', 'Actions'] as const;
+const TABS = ['Intelligence (ETH)', 'Intelligence (Monad)', 'Rules Builder', 'Actions'] as const;
 export type TabId = (typeof TABS)[number];
 
 interface AppTabsProps {

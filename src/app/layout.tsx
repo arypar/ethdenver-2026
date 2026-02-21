@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "UniSignal",
-  description: "Intelligent DeFi signals powered by Uniswap",
+  title: "Chaintology",
+  description: "Intelligent DeFi signals and on-chain analytics",
 };
 
 export default function RootLayout({
