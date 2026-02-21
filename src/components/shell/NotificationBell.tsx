@@ -100,11 +100,22 @@ export function NotificationBell() {
                         <span className="text-[12px] font-medium text-white/80 truncate">
                           {n.ruleName}
                         </span>
+                        {n.pool && (
+                          <span className="rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white/30 shrink-0">
+                            {n.pool}
+                          </span>
+                        )}
                         <span className="text-[10px] text-white/25 shrink-0">
                           {timeAgo(n.timestamp)}
                         </span>
                       </div>
-                      <p className="text-[11px] text-white/40 truncate mt-0.5">{n.message}</p>
+                      <p className="text-[11px] text-white/50 mt-0.5">{n.triggerReason}</p>
+                      {n.conditions.length > 0 && (
+                        <p className="text-[10px] text-primary/70 mt-0.5 truncate">
+                          {n.conditions.join(' · ')}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-white/40 truncate mt-0.5">&rarr; {n.message}</p>
                     </div>
                     <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       {!n.read && (

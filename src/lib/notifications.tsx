@@ -16,6 +16,9 @@ export interface Notification {
   id: string;
   ruleName: string;
   message: string;
+  triggerReason: string;
+  pool: string;
+  conditions: string[];
   timestamp: number;
   read: boolean;
 }
@@ -38,7 +41,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const addNotification = useCallback((n: Omit<Notification, 'read'>) => {
-    setNotifications(prev => [{ ...n, read: false }, ...prev]);
+    setNotifications(prev => {
+      if (prev.some(existing => existing.id === n.id)) return prev;
+      return [{ ...n, read: false }, ...prev];
+    });
   }, []);
 
   const markRead = useCallback((id: string) => {
@@ -74,35 +80,37 @@ export function useNotifications() {
   return ctx;
 }
 
+const NOTIFY_MAX_AGE_MS = 60_000;
+const TOAST_MAX_AGE_MS = 15_000;
+
 export function useNotificationSync(actions: ActionItem[]) {
   const { addNotification } = useNotifications();
   const seenIds = useRef<Set<string>>(new Set());
-  const initialised = useRef(false);
 
   useEffect(() => {
-    if (actions.length === 0) return;
-
-    if (!initialised.current) {
-      for (const a of actions) seenIds.current.add(a.id);
-      initialised.current = true;
-      return;
-    }
-
     for (const action of actions) {
       if (seenIds.current.has(action.id)) continue;
       seenIds.current.add(action.id);
+
+      const ageMs = Date.now() - action.timestamp;
+      if (ageMs > NOTIFY_MAX_AGE_MS) continue;
 
       addNotification({
         id: action.id,
         ruleName: action.ruleName,
         message: action.suggestedAction,
+        triggerReason: action.triggerReason,
+        pool: action.details?.pool ?? '',
+        conditions: action.details?.conditionsMet ?? [],
         timestamp: action.timestamp,
       });
 
-      toast(action.ruleName, {
-        description: action.suggestedAction,
-        duration: 5000,
-      });
+      if (ageMs < TOAST_MAX_AGE_MS) {
+        toast(action.ruleName, {
+          description: `${action.triggerReason} — ${action.suggestedAction}`,
+          duration: 5000,
+        });
+      }
     }
   }, [actions, addNotification]);
 }
