@@ -14,7 +14,7 @@ import {
   PALETTE_ITEMS, createDefaultConfig,
   type CanvasBlock, type PaletteItem, type BlockCategory,
 } from './block-types';
-import type { Rule, TriggerType, Pool, ConditionField, ConditionOperator, WindowSize, ActionType } from '@/lib/types';
+import type { Rule, TriggerType, Pool, ConditionField, ConditionOperator, ActionType } from '@/lib/types';
 
 interface RulesTabProps {
   connected: boolean;
@@ -121,7 +121,7 @@ export function RulesTab({
     <div>
       <div className="mb-8">
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">Rules Builder</h1>
-        <p className="mt-1 text-[13px] text-white/40">Build automated conditions with visual blocks.</p>
+        <p className="mt-1 text-[13px] text-white/40">Set price alerts and swap recommendations for any pool.</p>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -157,10 +157,10 @@ function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: st
     id: existingId || crypto.randomUUID(),
     name: name || 'Untitled Rule',
     enabled: true,
-    trigger: { type: (t?.type || 'Swap') as TriggerType, pool: (String(t?.config.pool) || 'WETH/USDC') as Pool },
+    trigger: { type: 'Swap' as TriggerType, pool: (String(t?.config.pool) || 'WETH/USDC') as Pool },
     conditions: conditions.map(c => ({
       id: c.id, field: c.type as ConditionField, operator: (String(c.config.operator) || '>') as ConditionOperator,
-      value: String(c.config.value || ''), ...(c.config.window ? { window: String(c.config.window) as WindowSize } : {}),
+      value: String(c.config.value || ''),
     })),
     actions: actions.map(a => ({
       id: a.id, type: a.type as ActionType,
@@ -172,7 +172,7 @@ function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: st
 
 function convertRuleToBlocks(rule: Rule): CanvasBlock[] {
   const blocks: CanvasBlock[] = [];
-  blocks.push({ id: crypto.randomUUID(), category: 'trigger', type: rule.trigger.type, config: { pool: rule.trigger.pool } });
+  blocks.push({ id: crypto.randomUUID(), category: 'trigger', type: 'Pool', config: { pool: rule.trigger.pool } });
   for (const c of rule.conditions) {
     const config: Record<string, string | number> = { operator: c.operator, value: c.value };
     if (c.window) config.window = c.window;

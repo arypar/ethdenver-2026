@@ -4,13 +4,11 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { PoolInput } from '@/components/ui/pool-input';
 import { GripVertical, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CATEGORY_META, type CanvasBlock, type BlockCategory } from './block-types';
-import type { ConditionOperator, WindowSize } from '@/lib/types';
-
-const OPERATORS: ConditionOperator[] = ['>', '>=', '<', '<=', '='];
-const WINDOWS: WindowSize[] = ['1m', '5m', '15m', '1h'];
+import type { ConditionOperator } from '@/lib/types';
 
 const GLASS_STYLES: Record<BlockCategory, { className: string; shadow: string }> = {
   trigger: {
@@ -33,9 +31,10 @@ interface RuleBlockProps {
   block: CanvasBlock;
   onUpdate: (id: string, config: Record<string, string | number>) => void;
   onRemove: (id: string) => void;
+  poolTokens?: string[];
 }
 
-export function RuleBlock({ block, onUpdate, onRemove }: RuleBlockProps) {
+export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const meta = CATEGORY_META[block.category];
@@ -68,7 +67,7 @@ export function RuleBlock({ block, onUpdate, onRemove }: RuleBlockProps) {
             <span className={cn('text-[10px] font-bold uppercase tracking-[0.08em]', meta.color)}>{meta.tagLabel}</span>
             <span className="text-[13px] font-semibold text-white/80">{block.type}</span>
           </div>
-          <BlockConfig block={block} updateField={updateField} />
+          <BlockConfig block={block} updateField={updateField} poolTokens={poolTokens} />
         </div>
 
         <button onClick={() => onRemove(block.id)}
@@ -80,64 +79,67 @@ export function RuleBlock({ block, onUpdate, onRemove }: RuleBlockProps) {
   );
 }
 
-function BlockConfig({ block, updateField }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void }) {
+function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void; poolTokens?: string[] }) {
   if (block.category === 'trigger') {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] text-white/30 shrink-0">Pool</span>
-        <Input
-          value={String(block.config.pool || 'WETH/USDC')}
-          onChange={e => updateField('pool', e.target.value.toUpperCase())}
-          placeholder="e.g. PEPE/WETH"
-          className={cn(INPUT_CLASS, 'w-[140px]')}
-        />
-      </div>
+      <PoolInput
+        value={String(block.config.pool || 'WETH/USDC')}
+        onChange={pool => updateField('pool', pool)}
+        inputClassName="h-8"
+      />
     );
   }
 
   if (block.category === 'condition') {
-    if (block.type === 'Swap Direction') {
-      return (
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-white/30 shrink-0">Direction</span>
-          <Select value={String(block.config.direction || 'Buy')} onValueChange={v => updateField('direction', v)}>
-            <SelectTrigger className={cn(INPUT_CLASS)} size="sm"><SelectValue /></SelectTrigger>
-            <SelectContent position="popper">
-              <SelectItem value="Buy">Buy</SelectItem>
-              <SelectItem value="Sell">Sell</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    }
-
-    const showWindow = block.type === 'Count in Window';
     return (
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] text-white/30 shrink-0">Price</span>
         <Select value={String(block.config.operator || '>')} onValueChange={v => updateField('operator', v)}>
-          <SelectTrigger className={cn(INPUT_CLASS, 'w-[68px]')} size="sm"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper">{OPERATORS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-[100px]')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value=">">above</SelectItem>
+            <SelectItem value="<">below</SelectItem>
+            <SelectItem value=">=">at or above</SelectItem>
+            <SelectItem value="<=">at or below</SelectItem>
+          </SelectContent>
         </Select>
-        <Input value={String(block.config.value || '')} onChange={e => updateField('value', e.target.value)} placeholder="Value" className={cn(INPUT_CLASS, 'w-[100px]')} />
-        {showWindow && (
-          <Select value={String(block.config.window || '5m')} onValueChange={v => updateField('window', v)}>
-            <SelectTrigger className={cn(INPUT_CLASS, 'w-[76px]')} size="sm"><SelectValue /></SelectTrigger>
-            <SelectContent position="popper">{WINDOWS.map(w => <SelectItem key={w} value={w}>{w}</SelectItem>)}</SelectContent>
-          </Select>
-        )}
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
+          <Input
+            type="number"
+            value={String(block.config.value || '')}
+            onChange={e => updateField('value', e.target.value)}
+            placeholder="0.00"
+            className={cn(INPUT_CLASS, 'w-[120px] pl-6')}
+          />
+        </div>
       </div>
     );
   }
 
-  if (block.type === 'Notify') {
-    return <Input value={String(block.config.channel || '')} onChange={e => updateField('channel', e.target.value)} placeholder="Channel (e.g. #alerts)" className={INPUT_CLASS} />;
-  }
-
-  if (block.type === 'Recommend Swap' || block.type === 'Auto Swap') {
+  if (block.type === 'Recommend Swap') {
+    const tokens = poolTokens && poolTokens.length > 0 ? poolTokens : ['Token A', 'Token B'];
     return (
       <div className="flex items-center gap-2">
-        <Input value={String(block.config.token || '')} onChange={e => updateField('token', e.target.value)} placeholder="Token" className={cn(INPUT_CLASS, 'w-[100px]')} />
-        <Input type="number" value={block.config.percent?.toString() || ''} onChange={e => updateField('percent', Number(e.target.value))} placeholder="%" className={cn(INPUT_CLASS, 'w-[72px]')} />
+        <span className="text-[11px] text-white/30 shrink-0">Swap into</span>
+        <Select value={String(block.config.token || '')} onValueChange={v => updateField('token', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-[100px]')} size="sm">
+            <SelectValue placeholder="Token" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {tokens.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
+          <Input
+            type="number"
+            value={String(block.config.amount || '')}
+            onChange={e => updateField('amount', e.target.value)}
+            placeholder="Amount"
+            className={cn(INPUT_CLASS, 'w-[110px] pl-6')}
+          />
+        </div>
       </div>
     );
   }

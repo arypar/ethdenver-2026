@@ -38,8 +38,8 @@ export function ActiveRulesList({ rules, onToggle, onEdit, onDuplicate, onDelete
               <div className="flex-1 min-w-0">
                 <span className="text-[13px] font-medium text-white/80">{rule.name}</span>
                 <p className="text-[11px] text-white/25 truncate mt-0.5">
-                  {rule.trigger.type} on {rule.trigger.pool}
-                  {rule.conditions.length > 0 && ` · ${rule.conditions.length} condition${rule.conditions.length > 1 ? 's' : ''}`}
+                  {rule.trigger.pool}
+                  {rule.conditions.length > 0 && ` · ${rule.conditions.map(c => `price ${c.operator} $${c.value}`).join(', ')}`}
                   {rule.actions.length > 0 && ` · ${rule.actions.map(a => a.type).join(', ')}`}
                 </p>
               </div>

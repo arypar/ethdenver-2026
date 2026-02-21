@@ -1,8 +1,8 @@
 'use client';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PoolInput } from '@/components/ui/pool-input';
 import { cn } from '@/lib/utils';
 import { Plus, Loader2 } from 'lucide-react';
 import { WELL_KNOWN_POOLS } from '@/lib/tokens';
@@ -31,11 +31,10 @@ export function ChartForm({ config, onChange, onGenerate, loading }: ChartFormPr
         </Field>
 
         <Field label="Pool">
-          <Input
+          <PoolInput
             value={config.pool}
-            onChange={e => onChange({ ...config, pool: e.target.value.toUpperCase() })}
-            placeholder="e.g. PEPE/WETH"
-            className="w-[160px] bg-white/[0.05] border-white/[0.08] text-white/80 h-9 text-sm placeholder:text-white/20"
+            onChange={pool => onChange({ ...config, pool })}
+            inputClassName="h-9"
           />
         </Field>
 

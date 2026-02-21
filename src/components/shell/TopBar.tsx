@@ -30,17 +30,6 @@ export function TopBar({ children }: TopBarProps) {
             const connected = mounted && account && chain;
             return (
               <div className="flex items-center gap-2">
-                {connected && (
-                  <button
-                    onClick={openChainModal}
-                    className="flex h-9 items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-2.5 backdrop-blur-xl transition-all hover:bg-white/[0.08] hover:border-white/[0.12]"
-                  >
-                    {chain.hasIcon && chain.iconUrl && (
-                      <img src={chain.iconUrl} alt={chain.name ?? ''} className="h-4 w-4 rounded-full" />
-                    )}
-                    <span className="text-[12px] font-medium text-white/60">{chain.name}</span>
-                  </button>
-                )}
                 <button
                   onClick={connected ? openAccountModal : openConnectModal}
                   className="flex h-9 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.05] px-3.5 backdrop-blur-xl transition-all hover:bg-white/[0.1] hover:border-white/[0.16]"

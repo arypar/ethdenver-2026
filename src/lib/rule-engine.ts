@@ -41,6 +41,14 @@ export function evaluateCondition(
   }
 
   switch (condition.field) {
+    case 'Price': {
+      const met = compare(swap.price, condition.operator, threshold);
+      return {
+        met,
+        description: `Price: $${swap.price.toLocaleString()} ${condition.operator} $${threshold.toLocaleString()}`,
+      };
+    }
+
     case 'Notional USD': {
       const met = compare(swap.volumeUSD, condition.operator, threshold);
       return {
@@ -114,9 +122,7 @@ export function evaluateRule(
       case 'Notify':
         return `Notify ${a.config.channel || 'channel'}`;
       case 'Recommend Swap':
-        return `Recommend: swap ${a.config.percent || 50}% into ${a.config.token || 'token'}`;
-      case 'Auto Swap':
-        return `Auto Swap: ${a.config.percent || 50}% into ${a.config.token || 'token'}`;
+        return `Recommend: swap $${a.config.amount || '?'} into ${a.config.token || 'token'}`;
       default:
         return a.type;
     }

@@ -27,6 +27,9 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
   const actions = blocks.filter(b => b.category === 'action');
   const hasBlocks = blocks.length > 0;
 
+  const poolName = triggers[0] ? String(triggers[0].config.pool || '') : '';
+  const poolTokens = poolName.includes('/') ? poolName.split('/') : [];
+
   return (
     <div
       ref={setNodeRef}
@@ -67,7 +70,7 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
               {(triggers.length > 0 || conditions.length > 0) && actions.length > 0 && <Connector />}
               {actions.length > 0 && (
                 <BlockSection label="THEN" color="text-emerald-400">
-                  {actions.map(block => <RuleBlock key={block.id} block={block} onUpdate={onUpdateBlock} onRemove={onRemoveBlock} />)}
+                  {actions.map(block => <RuleBlock key={block.id} block={block} onUpdate={onUpdateBlock} onRemove={onRemoveBlock} poolTokens={poolTokens} />)}
                 </BlockSection>
               )}
             </div>

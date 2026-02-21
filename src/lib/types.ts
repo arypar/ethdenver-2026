@@ -21,11 +21,12 @@ export interface SavedChart {
 export interface ChartDataPoint {
   time: string;
   value: number;
+  price?: number;
   block?: number;
 }
 
 export type TriggerType = 'Swap';
-export type ConditionField = 'Notional USD' | 'Price Impact %' | 'Swap Direction' | 'Count in Window';
+export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Swap Direction' | 'Count in Window';
 export type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
 export type WindowSize = '1m' | '5m' | '15m' | '1h';
 export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap';

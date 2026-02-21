@@ -24,11 +24,17 @@ export function IntelligenceTab({ charts, onAddChart, onRenameChart, onRemoveCha
   });
   const [expandedChart, setExpandedChart] = useState<SavedChart | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await fetchChartData(config.metric, config.pool, config.range);
+      if (data.length === 0) {
+        setError(`No swap activity for ${config.pool} in the last ${config.range}. Try a wider time range or a more active pair.`);
+        return;
+      }
       onAddChart({
         id: crypto.randomUUID(),
         title: `${config.pool} ${config.metric}`,
@@ -36,6 +42,8 @@ export function IntelligenceTab({ charts, onAddChart, onRenameChart, onRemoveCha
         data,
         createdAt: Date.now(),
       });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch chart data');
     } finally {
       setLoading(false);
     }
@@ -81,6 +89,11 @@ export function IntelligenceTab({ charts, onAddChart, onRenameChart, onRemoveCha
         </div>
         <div className="px-5 py-4">
           <ChartForm config={config} onChange={setConfig} onGenerate={handleGenerate} loading={loading} />
+          {error && (
+            <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
+              <p className="text-[12px] text-amber-400/80">{error}</p>
+            </div>
+          )}
         </div>
       </div>
 

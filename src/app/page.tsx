@@ -19,7 +19,7 @@ export default function Home() {
 
   const { charts, add: addChart, rename: renameChart, remove: removeChart, appendDataPoint, accumulateDataPoint } = useSavedCharts();
   const { rules, addRule, updateRule, removeRule, duplicateRule } = useRules();
-  const { actions, updateStatus, simulateTrigger, addAction } = useActions();
+  const { actions, updateStatus, simulateTrigger, addAction, clearAll: clearActions } = useActions();
 
   const requireConnect = useCallback(() => {
     if (openConnectModal) openConnectModal();
@@ -79,6 +79,7 @@ export default function Home() {
               connected={isConnected}
               onUpdateStatus={updateStatus}
               onAddAction={addAction}
+              onClearAll={clearActions}
               onConnectRequired={requireConnect}
             />
           )}

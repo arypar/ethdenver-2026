@@ -14,17 +14,12 @@ export interface CanvasBlock {
 }
 
 export const PALETTE_ITEMS: PaletteItem[] = [
-  { type: 'Swap', category: 'trigger', label: 'Swap Event' },
+  { type: 'Pool', category: 'trigger', label: 'Pool' },
 
-  { type: 'Notional USD', category: 'condition', label: 'Notional USD' },
-  { type: 'Price Impact %', category: 'condition', label: 'Price Impact %' },
-  { type: 'Swap Direction', category: 'condition', label: 'Swap Direction' },
-  { type: 'Count in Window', category: 'condition', label: 'Count in Window' },
+  { type: 'Price', category: 'condition', label: 'Price Threshold' },
 
   { type: 'Create Alert', category: 'action', label: 'Create Alert' },
-  { type: 'Notify', category: 'action', label: 'Notify Channel' },
   { type: 'Recommend Swap', category: 'action', label: 'Recommend Swap' },
-  { type: 'Auto Swap', category: 'action', label: 'Auto Swap' },
 ];
 
 export const CATEGORY_META: Record<BlockCategory, { label: string; tagLabel: string; color: string; bg: string; border: string; dotColor: string; glow: string }> = {
@@ -62,16 +57,8 @@ export function createDefaultConfig(category: BlockCategory, type: string): Reco
     return { pool: 'WETH/USDC' };
   }
   if (category === 'condition') {
-    const base: Record<string, string | number> = { operator: '>', value: '' };
-    if (type === 'Count in Window') {
-      base.window = '5m';
-    }
-    if (type === 'Swap Direction') {
-      return { direction: 'Buy' };
-    }
-    return base;
+    return { operator: '>', value: '' };
   }
-  if (type === 'Notify') return { channel: '' };
-  if (type === 'Recommend Swap' || type === 'Auto Swap') return { token: '', percent: 50 };
+  if (type === 'Recommend Swap') return { token: '', amount: '' };
   return { message: '' };
 }

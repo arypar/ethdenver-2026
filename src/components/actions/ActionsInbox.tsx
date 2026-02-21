@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ActionDetailDialog } from './ActionDetailDialog';
 import { ExecuteDialog } from './ExecuteDialog';
 import { cn } from '@/lib/utils';
-import { Zap, Eye, PlayCircle, XCircle, Inbox, Radio } from 'lucide-react';
+import { Zap, Eye, PlayCircle, XCircle, Inbox, Radio, Trash2 } from 'lucide-react';
 import type { ActionItem, ActionStatus, Rule } from '@/lib/types';
 import { generateTriggerData } from '@/lib/mock-data';
 
@@ -18,10 +18,11 @@ interface ActionsInboxProps {
   connected: boolean;
   onUpdateStatus: (id: string, status: ActionStatus) => void;
   onAddAction: (action: ActionItem) => void;
+  onClearAll: () => void;
   onConnectRequired: () => void;
 }
 
-export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddAction, onConnectRequired }: ActionsInboxProps) {
+export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddAction, onClearAll, onConnectRequired }: ActionsInboxProps) {
   const [filter, setFilter] = useState<Filter>('All');
   const [reviewAction, setReviewAction] = useState<ActionItem | null>(null);
   const [executeState, setExecuteState] = useState<{ open: boolean; id: string; label: string; pool: string }>({ open: false, id: '', label: '', pool: '' });
@@ -63,6 +64,11 @@ export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddA
               )}>{f}</button>
             ))}
           </div>
+          {actions.length > 0 && (
+            <Button variant="outline" size="sm" className="rounded-xl text-[12px] font-semibold border-white/[0.08] bg-white/[0.04] text-white/50 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10" onClick={onClearAll}>
+              <Trash2 className="h-3.5 w-3.5" /> Clear All
+            </Button>
+          )}
           <Button size="sm" className="rounded-xl text-[12px] font-semibold" onClick={simulateGlobal} disabled={rules.length === 0}
             style={{ boxShadow: '0 0 16px rgba(255,0,122,0.2)' }}>
             <Zap className="h-3.5 w-3.5" /> Simulate

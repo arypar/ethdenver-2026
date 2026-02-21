@@ -94,25 +94,7 @@ export function useSavedCharts() {
 
       const source = dbCharts && dbCharts.length > 0 ? dbCharts : [];
 
-      if (source.length === 0) {
-        const local = loadFromStorage<SavedChart[]>('unisignal-charts', []);
-        if (local.length > 0) {
-          const withEmptyData = local.map(c => ({ ...c, data: [] as SavedChart['data'] }));
-          setCharts(withEmptyData);
-
-          for (const chart of local) {
-            apiPost('/api/charts', { id: chart.id, title: chart.title, config: chart.config });
-            fetchChartData(chart.config.metric, chart.config.pool, chart.config.range)
-              .then(data => {
-                if (cancelled) return;
-                setCharts(prev => prev.map(c => c.id === chart.id ? { ...c, data } : c));
-              })
-              .catch(() => {});
-          }
-          return;
-        }
-        return;
-      }
+      if (source.length === 0) return;
 
       const withEmptyData: SavedChart[] = source.map(c => ({
         id: c.id,
@@ -280,5 +262,10 @@ export function useActions() {
     return action;
   }, [addAction]);
 
-  return { actions, addAction, updateStatus, simulateTrigger };
+  const clearAll = useCallback(() => {
+    setActions([]);
+    saveToStorage('unisignal-actions', []);
+  }, []);
+
+  return { actions, addAction, updateStatus, simulateTrigger, clearAll };
 }
