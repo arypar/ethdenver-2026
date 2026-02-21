@@ -48,6 +48,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
   const [step, setStep] = useState<Step>('input');
   const [amount, setAmount] = useState(isMonad ? '0.1' : '0.01');
   const [isBuy, setIsBuy] = useState(true);
+  const [direction, setDirection] = useState<'AtoB' | 'BtoA'>('AtoB');
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [nadfunQuoteData, setNadfunQuoteData] = useState<NadfunQuote | null>(null);
   const [tokenSymbol, setTokenSymbol] = useState<string>('');
@@ -82,6 +83,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
       setStep('input');
       setAmount(isMonad ? '0.1' : '0.01');
       setIsBuy(true);
+      setDirection('AtoB');
       setQuote(null);
       setNadfunQuoteData(null);
       setError('');
@@ -210,17 +212,18 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
 
   // -- ETH (Uniswap) quote --
   const handleGetQuote = async () => {
-    if (!address || !poolTokens || !tokenA) return;
+    if (!address || !poolTokens || !tokenA || !tokenB) return;
     setStep('quoting');
     setError('');
     try {
-      const rawAmount = parseTokenAmount(amount, tokenA.decimals);
-      const params = await buildQuoteParams(address, poolKey, 'AtoB', rawAmount);
+      const inputToken = direction === 'AtoB' ? tokenA : tokenB;
+      const rawAmount = parseTokenAmount(amount, inputToken.decimals);
+      const params = await buildQuoteParams(address, poolKey, direction, rawAmount);
       const quoteRes = await getQuote(params);
       setQuote(quoteRes);
       const approvalRes = await checkApproval({
         walletAddress: address,
-        token: tokenA.address,
+        token: inputToken.address,
         amount: rawAmount,
         chainId: poolTokens.chainId,
       });
@@ -232,16 +235,17 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
   };
 
   const handleApprove = async () => {
-    if (!address || !poolTokens || !tokenA) return;
+    if (!address || !poolTokens || !tokenA || !tokenB) return;
     setStep('approving');
     try {
       const chainId = poolTokens.chainId;
       await switchChain(wagmiConfig, { chainId });
       const walletClient = await getWalletClient(wagmiConfig, { chainId });
-      const rawAmount = parseTokenAmount(amount, tokenA.decimals);
+      const inputToken = direction === 'AtoB' ? tokenA : tokenB;
+      const rawAmount = parseTokenAmount(amount, inputToken.decimals);
       const approvalRes = await checkApproval({
         walletAddress: address,
-        token: tokenA.address,
+        token: inputToken.address,
         amount: rawAmount,
         chainId,
       });
@@ -290,15 +294,16 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     onClose();
   };
 
+  const outputToken = direction === 'AtoB' ? tokenB : tokenA;
   const outputAmount = isMonad
     ? nadfunQuoteData?.amountOutFormatted ?? ''
-    : quote?.quote?.output && tokenB
-      ? formatTokenAmount(quote.quote.output.amount, tokenB)
+    : quote?.quote?.output && outputToken
+      ? formatTokenAmount(quote.quote.output.amount, outputToken)
       : '';
   const gasFeeUSD = isMonad ? '' : quote?.quote?.gasFeeUSD ?? '';
 
-  const fromSymbol = isMonad ? (isBuy ? 'MON' : tokenSymbol) : (tokenA?.symbol ?? '?');
-  const toSymbol = isMonad ? (isBuy ? tokenSymbol : 'MON') : (tokenB?.symbol ?? '?');
+  const fromSymbol = isMonad ? (isBuy ? 'MON' : tokenSymbol) : (direction === 'AtoB' ? (tokenA?.symbol ?? '?') : (tokenB?.symbol ?? '?'));
+  const toSymbol = isMonad ? (isBuy ? tokenSymbol : 'MON') : (direction === 'AtoB' ? (tokenB?.symbol ?? '?') : (tokenA?.symbol ?? '?'));
   const explorerUrl = isMonad
     ? `https://monadscan.com/tx/${txHash}`
     : `https://etherscan.io/tx/${txHash}`;
@@ -423,11 +428,15 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
                 </div>
               </div>
 
-              {/* Arrow */}
+              {/* Arrow — click to flip direction */}
               <div className="flex justify-center -my-1.5 relative z-10">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-[#0D0D16]">
+                <button
+                  type="button"
+                  onClick={() => !isMonad && setDirection(d => d === 'AtoB' ? 'BtoA' : 'AtoB')}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-[#0D0D16] transition-all hover:border-white/[0.2] hover:bg-white/[0.06] active:scale-95"
+                >
                   <ArrowDownUp className="h-3.5 w-3.5 text-white/40" />
-                </div>
+                </button>
               </div>
 
               {/* To token */}
