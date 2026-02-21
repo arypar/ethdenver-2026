@@ -9,6 +9,7 @@ import { IntelligenceTab } from '@/components/intelligence/IntelligenceTab';
 import { RulesTab } from '@/components/rules/RulesTab';
 import { ActionsInbox } from '@/components/actions/ActionsInbox';
 import { useSavedCharts, useRules, useActions } from '@/lib/store';
+import { useNotificationSync } from '@/lib/notifications';
 
 export default function Home() {
   const [tab, setTab] = useState<TabId>('Intelligence (ETH)');
@@ -20,6 +21,8 @@ export default function Home() {
   const monadCharts = useSavedCharts('monad');
   const { rules, addRule, updateRule, removeRule, duplicateRule } = useRules();
   const { actions, updateStatus, clearAll: clearActions } = useActions();
+
+  useNotificationSync(actions);
 
   const requireConnect = useCallback(() => {
     if (openConnectModal) openConnectModal();

@@ -1,6 +1,5 @@
 import { Router } from 'express';
-import { monadTracker, dbQueryMonadSwaps, type MonadSwapRecord } from '../lib/monad-tracker.js';
-import { DB_ENABLED } from '../lib/supabase.js';
+import { monadTracker, type MonadSwapRecord } from '../lib/monad-tracker.js';
 import { log, logError } from '../lib/log.js';
 
 const router = Router();
@@ -110,26 +109,13 @@ router.post('/chart-data', async (req, res) => {
       }
     }
 
-    const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
-    let swaps: MonadSwapRecord[];
-
-    if (DB_ENABLED) {
-      swaps = await dbQueryMonadSwaps(addr, sinceMs);
-      log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps from DB`);
-
-      if (swaps.length === 0) {
-        log('monad-chart', `${addr.slice(0, 10)} — DB empty, triggering backfill...`);
-        await monadTracker.backfill(addr, config.blocksBack);
-        swaps = await dbQueryMonadSwaps(addr, sinceMs);
-        log('monad-chart', `${addr.slice(0, 10)} — ${swaps.length} swaps after backfill`);
-      }
-    } else {
-      if (!monadTracker.hasBackfill(addr, config.blocksBack)) {
-        await monadTracker.backfill(addr, config.blocksBack);
-      }
-      swaps = monadTracker.getSwaps(addr, sinceMs);
-      log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps from memory`);
+    if (!monadTracker.hasBackfill(addr, config.blocksBack)) {
+      await monadTracker.backfill(addr, config.blocksBack);
     }
+
+    const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
+    const swaps = monadTracker.getSwaps(addr, sinceMs);
+    log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps`);
 
     if (swaps.length === 0) {
       log('monad-chart', `${addr.slice(0, 10)} — no swaps, returning empty`);
@@ -137,8 +123,7 @@ router.post('/chart-data', async (req, res) => {
       return;
     }
 
-    const latestBlock = Math.max(...swaps.map(s => s.blockNumber));
-    const buckets = bucketSwaps(swaps, config, latestBlock);
+    const buckets = bucketSwaps(swaps, config);
 
     const dataPoints = buckets.map(b => {
       let value: number;
@@ -162,7 +147,7 @@ router.post('/chart-data', async (req, res) => {
         time: b.label,
         value: Math.round(value * 1e6) / 1e6,
         price: Math.round((b.closingPrice ?? 0) * 1e6) / 1e6,
-        block: b.blockEnd,
+        block: 0,
       };
     });
 

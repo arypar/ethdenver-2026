@@ -30,10 +30,10 @@ export function ChartForm({ config, onChange, onGenerate, loading, chain = 'eth'
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex items-end gap-3">
         <Field label="Metric">
           <Select value={config.metric} onValueChange={v => onChange({ ...config, metric: v as Metric })}>
-            <SelectTrigger className="w-[150px] bg-white/[0.05] border-white/[0.08] text-white/80 h-9"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[120px] bg-white/[0.05] border-white/[0.08] text-white/80 h-9"><SelectValue /></SelectTrigger>
             <SelectContent position="popper">{metrics.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
@@ -81,33 +81,35 @@ export function ChartForm({ config, onChange, onGenerate, loading, chain = 'eth'
             ))}
           </div>
         </Field>
+      </div>
 
-        <Button className="h-9 rounded-xl px-4 text-[13px] font-semibold" onClick={onGenerate} disabled={isDisabled}
+      <div className="flex items-center gap-3">
+        <Button className="h-9 shrink-0 rounded-xl px-4 text-[13px] font-semibold whitespace-nowrap" onClick={onGenerate} disabled={isDisabled}
           style={{ boxShadow: '0 0 20px rgba(255,0,122,0.25)' }}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           {loading ? 'Fetching...' : 'Generate'}
         </Button>
-      </div>
 
-      {!isMonad && (
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-white/20 mr-1">Popular:</span>
-          {WELL_KNOWN_POOLS.map(p => (
-            <button
-              key={p}
-              onClick={() => onChange({ ...config, pool: p })}
-              className={cn(
-                'rounded-md px-2 py-0.5 text-[11px] font-medium transition-all duration-150 border',
-                config.pool === p
-                  ? 'bg-white/[0.1] text-white border-white/[0.15]'
-                  : 'text-white/30 border-white/[0.06] hover:text-white/60 hover:border-white/[0.1]',
-              )}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
+        {!isMonad && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-white/20 mr-1">Popular:</span>
+            {WELL_KNOWN_POOLS.map(p => (
+              <button
+                key={p}
+                onClick={() => onChange({ ...config, pool: p })}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-[11px] font-medium transition-all duration-150 border',
+                  config.pool === p
+                    ? 'bg-white/[0.1] text-white border-white/[0.15]'
+                    : 'text-white/30 border-white/[0.06] hover:text-white/60 hover:border-white/[0.1]',
+                )}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

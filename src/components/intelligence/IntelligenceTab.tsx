@@ -9,7 +9,8 @@ import { LiveChartManager } from './LiveChartManager';
 import { SuggestedPools } from './SuggestedPools';
 import { fetchChartData } from '@/lib/pool-data';
 import { useWalletSuggestions, type PoolSuggestion } from '@/lib/use-wallet-suggestions';
-import { Activity, Zap } from 'lucide-react';
+import { AddPoolForm } from './AddPoolForm';
+import { Activity, Zap, Droplets } from 'lucide-react';
 import type { ChainId, ChartConfig, SavedChart } from '@/lib/types';
 
 interface IntelligenceTabProps {
@@ -104,6 +105,16 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
     }
   }, [config, chain, isMonad, onAddChart]);
 
+  const handleAddPool = useCallback((pool: string, poolAddress: string) => {
+    onAddChart({
+      id: crypto.randomUUID(),
+      title: `${pool} Liquidity`,
+      config: { metric: 'Liquidity', pool, range: '24H', chartType: 'area', chain: 'eth', poolAddress },
+      data: [],
+      createdAt: Date.now(),
+    });
+  }, [onAddChart]);
+
   const liveCount = charts.filter(c => c.data.length > 0 || c.config.metric === 'Liquidity').length;
 
   const headerTitle = isMonad ? 'Intelligence (Monad)' : 'Intelligence (ETH)';
@@ -152,20 +163,36 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
         )}
       </div>
 
-      {/* Create chart panel */}
-      <div className="mb-8 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3">
-          <Zap className="h-3.5 w-3.5 text-[#FF007A]" />
-          <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">New Chart</span>
+      {/* Create chart + Add liquidity pool panels */}
+      <div className="mb-8 flex gap-4">
+        {/* New Chart panel */}
+        <div className="flex-[2] min-w-0 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3">
+            <Zap className="h-3.5 w-3.5 text-[#FF007A]" />
+            <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">New Chart</span>
+          </div>
+          <div className="px-5 py-4">
+            <ChartForm config={config} onChange={setConfig} onGenerate={handleGenerate} loading={loading} chain={chain} />
+            {error && (
+              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
+                <p className="text-[12px] text-amber-400/80">{error}</p>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="px-5 py-4">
-          <ChartForm config={config} onChange={setConfig} onGenerate={handleGenerate} loading={loading} chain={chain} />
-          {error && (
-            <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
-              <p className="text-[12px] text-amber-400/80">{error}</p>
+
+        {/* New Liquidity Pool panel (ETH mainnet only) */}
+        {!isMonad && (
+          <div className="flex-1 min-w-0 rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-xl overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-3">
+              <Droplets className="h-3.5 w-3.5 text-[#FF007A]" />
+              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">New Liquidity Pool</span>
             </div>
-          )}
-        </div>
+            <div className="px-5 py-4">
+              <AddPoolForm onAdd={handleAddPool} existingPools={existingPools} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Charts grid */}

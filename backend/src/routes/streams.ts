@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabase, DB_ENABLED } from '../lib/supabase.js';
 import { broadcastStreamTx, broadcastLiquidityEvent } from '../lib/ws-server.js';
 import { tracker } from '../lib/pool-tracker.js';
+import { monadTracker } from '../lib/monad-tracker.js';
 import { log, logError } from '../lib/log.js';
 
 /*
@@ -36,38 +37,38 @@ import { log, logError } from '../lib/log.js';
  *      };
  *    }
  *
- * 2) Monad Mainnet Stream
+ * 2) Monad Mainnet Stream — nad.fun CurveBuy/CurveSell events
  *    Chain:       Monad (chain ID 143)
- *    Dataset:     Block (with transactions)
+ *    Dataset:     block_with_receipts
  *    Destination: POST → {BACKEND_URL}/streams/webhook/monad
  *
  *    Filter function (paste into QuickNode dashboard):
  *
  *    function main(stream) {
- *      var ROUTERS = [
- *        '0x0d97dc33264bfc1c226207428a79b26757fb9dc3',
- *        '0xfe31f71c1b106eac32f1a19239c9a9a72ddfb900',
- *      ];
- *      var blocks = stream.data;
- *      if (!blocks || !blocks.length) return null;
- *      var out = [];
- *      for (var i = 0; i < blocks.length; i++) {
- *        var block = blocks[i];
- *        if (!block.transactions) continue;
- *        var matched = [];
- *        for (var j = 0; j < block.transactions.length; j++) {
- *          var tx = block.transactions[j];
- *          if (tx.to && ROUTERS.indexOf(tx.to.toLowerCase()) !== -1) {
- *            matched.push(tx);
- *          }
- *        }
- *        if (matched.length > 0) {
- *          block.transactions = matched;
- *          out.push(block);
- *        }
- *      }
- *      return out.length > 0 ? out : null;
+ *      var curveAbi = JSON.stringify([
+ *        {"anonymous":false,"inputs":[{"indexed":true,"type":"address","name":"sender"},{"indexed":true,"type":"address","name":"token"},{"type":"uint256","name":"amountIn"},{"type":"uint256","name":"amountOut"}],"name":"CurveBuy","type":"event"},
+ *        {"anonymous":false,"inputs":[{"indexed":true,"type":"address","name":"sender"},{"indexed":true,"type":"address","name":"token"},{"type":"uint256","name":"amountIn"},{"type":"uint256","name":"amountOut"}],"name":"CurveSell","type":"event"}
+ *      ]);
+ *      var data = stream.data;
+ *      if (!data || !data.length) return null;
+ *      var decoded = decodeEVMReceipts(data[0].receipts, [curveAbi]);
+ *      var CURVE = '0xa7283d07812a02afb7c09b60f8896bcea3f90ace';
+ *      var matched = decoded.filter(function(r) {
+ *        if (!r.decodedLogs) return false;
+ *        r.decodedLogs = r.decodedLogs.filter(function(l) {
+ *          return l.address && l.address.toLowerCase() === CURVE;
+ *        });
+ *        return r.decodedLogs.length > 0;
+ *      });
+ *      if (matched.length === 0) return null;
+ *      return {
+ *        block: { number: data[0].number, hash: data[0].hash, timestamp: data[0].timestamp },
+ *        receipts: matched
+ *      };
  *    }
+ *
+ *    NOTE: The webhook handler also accepts the legacy raw-block format
+ *    (Block with transactions) for backward compatibility.
  * ============================================================
  */
 
@@ -147,7 +148,10 @@ interface EthPayload {
   receipts: DecodedReceipt[];
 }
 
-// ── POST /webhook/monad ── raw block transactions from Monad stream
+// ── POST /webhook/monad ── decoded CurveBuy/CurveSell events from Monad stream
+// Accepts two payload formats:
+//   1. Decoded receipts (block_with_receipts + decodeEVMReceipts filter) — preferred
+//   2. Legacy raw blocks (block_with_transactions) — falls back to raw tx logging
 router.post('/webhook/monad', async (req, res) => {
   const token = process.env.QUICKNODE_STREAM_TOKEN;
   if (token && req.headers['x-qn-api-key'] !== token) {
@@ -157,6 +161,42 @@ router.post('/webhook/monad', async (req, res) => {
 
   try {
     const body = req.body;
+
+    // ── Format 1: Decoded receipts (new stream with block_with_receipts) ──
+    if (body?.block && body?.receipts) {
+      const blockNumber = hexToNumber(body.block.number);
+      const blockTs = hexToNumber(body.block.timestamp);
+      const timestamp = blockTs * 1000;
+      let curveEvents = 0;
+
+      for (const receipt of body.receipts as DecodedReceipt[]) {
+        if (!receipt.decodedLogs) continue;
+        const txHash = receipt.transactionHash;
+
+        for (const dlog of receipt.decodedLogs) {
+          if (dlog.name !== 'CurveBuy' && dlog.name !== 'CurveSell') continue;
+
+          const direction: 'buy' | 'sell' = dlog.name === 'CurveBuy' ? 'buy' : 'sell';
+          const tokenAddr = String(dlog.token || '').toLowerCase();
+          const sender = String(dlog.sender || '');
+          const amountIn = BigInt(String(dlog.amountIn || '0'));
+          const amountOut = BigInt(String(dlog.amountOut || '0'));
+
+          const ingested = monadTracker.ingestCurveEvent(
+            direction, tokenAddr, sender, amountIn, amountOut, blockNumber, txHash, timestamp,
+          );
+          if (ingested) curveEvents++;
+        }
+      }
+
+      if (curveEvents > 0) {
+        log('streams', `[monad] block ${blockNumber} — ${curveEvents} curve event(s) ingested`);
+      }
+      res.json({ ok: true, chain: 'monad', block: blockNumber, curveEvents });
+      return;
+    }
+
+    // ── Format 2: Legacy raw blocks (backward compat) ──
     let blocks: RawBlock[] = [];
     if (Array.isArray(body)) blocks = body;
     else if (body?.data && Array.isArray(body.data)) blocks = body.data;

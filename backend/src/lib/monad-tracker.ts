@@ -7,6 +7,7 @@ import { resolveToken, getSwapHistorySince, type NadToken, type NadSwap } from '
 const MONAD_RPC = process.env.MONAD_RPC_URL || 'https://monad-mainnet.drpc.org';
 const CURVE_ADDRESS = '0xA7283d07812a02AFB7C09B60f8896bCEA3F90aCE' as const;
 const POLL_MS = 3_000;
+const API_POLL_MS = 15_000;
 const LOG_CHUNK_SIZE = 1000;
 const CONCURRENCY = 3;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -70,11 +71,13 @@ function apiSwapsToRecords(token: string, apiSwaps: NadSwap[]): MonadSwapRecord[
     const nativeAmount = Number(formatEther(BigInt(info.native_amount)));
     const tokenAmount = Number(formatEther(BigInt(info.token_amount)));
     const price = tokenAmount > 0 ? nativeAmount / tokenAmount : 0;
+    const amountIn = direction === 'buy' ? info.native_amount : info.token_amount;
+    const amountOut = direction === 'buy' ? info.token_amount : info.native_amount;
     return {
       token: token.toLowerCase(),
       direction,
-      amountIn: info.native_amount,
-      amountOut: info.token_amount,
+      amountIn,
+      amountOut,
       price,
       volumeMON: nativeAmount,
       sender: '',
@@ -83,6 +86,12 @@ function apiSwapsToRecords(token: string, apiSwaps: NadSwap[]): MonadSwapRecord[
       timestamp: info.created_at * 1000,
     };
   });
+}
+
+async function dbClearMonadSwaps(token: string): Promise<void> {
+  if (!DB_ENABLED || !supabase) return;
+  const { error } = await supabase.from('monad_swaps').delete().eq('token_address', token.toLowerCase());
+  if (error) logError('monad-db', `Clear swaps: ${error.message}`);
 }
 
 async function dbInsertMonadSwaps(swaps: MonadSwapRecord[]): Promise<void> {
@@ -138,6 +147,7 @@ class MonadTokenTracker extends EventEmitter {
   private tokens = new Map<string, TrackedTokenState>();
   private lastBlock = BigInt(0);
   private interval: ReturnType<typeof setInterval> | null = null;
+  private apiInterval: ReturnType<typeof setInterval> | null = null;
   private started = false;
 
   async start() {
@@ -155,17 +165,26 @@ class MonadTokenTracker extends EventEmitter {
     if (DB_ENABLED && supabase) {
       const { data } = await supabase.from('monad_tracked_tokens').select('*');
       for (const row of data ?? []) {
-        this.tokens.set(row.token_address.toLowerCase(), {
+        const addr = row.token_address.toLowerCase();
+        this.tokens.set(addr, {
           meta: { name: row.name, symbol: row.symbol, image_url: row.image_url, graduated: false, creator: '' },
           swaps: [],
           backfillBlocks: 0,
           backfilling: false,
         });
         log('monad-tracker', `Loaded tracked token: ${row.symbol || row.token_address}`);
+        resolveToken(addr).then(meta => {
+          const state = this.tokens.get(addr);
+          if (state && meta) {
+            state.meta = meta;
+            if (meta.graduated) log('monad-tracker', `${meta.symbol || addr.slice(0, 10)} marked as graduated — API polling enabled`);
+          }
+        }).catch(() => {});
       }
     }
 
     this.interval = setInterval(() => this.poll(), POLL_MS);
+    this.apiInterval = setInterval(() => this.pollApi(), API_POLL_MS);
     if (this.tokens.size > 0) this.poll();
   }
 
@@ -230,6 +249,44 @@ class MonadTokenTracker extends EventEmitter {
     return Number(this.lastBlock);
   }
 
+  ingestCurveEvent(
+    direction: 'buy' | 'sell',
+    tokenAddress: string,
+    sender: string,
+    amountIn: bigint,
+    amountOut: bigint,
+    blockNumber: number,
+    txHash: string,
+    timestamp: number,
+  ): boolean {
+    const addr = tokenAddress.toLowerCase();
+    const state = this.tokens.get(addr);
+    if (!state) return false;
+
+    if (state.swaps.some(s => s.txHash === txHash && s.direction === direction && s.amountIn === amountIn.toString())) {
+      return false;
+    }
+
+    const price = computePrice(direction, amountIn, amountOut);
+    const swap: MonadSwapRecord = {
+      token: addr,
+      direction,
+      amountIn: amountIn.toString(),
+      amountOut: amountOut.toString(),
+      price,
+      volumeMON: Number(formatEther(direction === 'buy' ? amountIn : amountOut)),
+      sender,
+      blockNumber,
+      txHash,
+      timestamp,
+    };
+
+    state.swaps.push(swap);
+    this.emit('swap', swap);
+    dbInsertMonadSwaps([swap]).catch(() => {});
+    return true;
+  }
+
   async backfill(tokenAddress: string, blocksBack: number): Promise<void> {
     const addr = tokenAddress.toLowerCase();
     const state = this.tokens.get(addr);
@@ -242,22 +299,9 @@ class MonadTokenTracker extends EventEmitter {
 
     state.backfilling = true;
     try {
-      const sinceMs = Date.now() - blocksBack * SECS_PER_BLOCK * 1000;
-
-      if (DB_ENABLED) {
-        const dbSwaps = await dbQueryMonadSwaps(addr, sinceMs);
-        if (dbSwaps.length > 0) {
-          log('monad-tracker', `${addr.slice(0, 10)} — loaded ${dbSwaps.length} swaps from DB`);
-          state.swaps = dbSwaps;
-          state.backfillBlocks = blocksBack;
-          state.backfilling = false;
-          return;
-        }
-      }
-
+      const now = Date.now();
       const currentBlock = await rpc.getBlockNumber();
       const startBlock = currentBlock - BigInt(blocksBack);
-      const now = Date.now();
 
       log('monad-tracker', `Backfilling ${addr.slice(0, 10)} — ${blocksBack} blocks from chain...`);
 
@@ -325,6 +369,7 @@ class MonadTokenTracker extends EventEmitter {
           state.backfillBlocks = blocksBack;
           const totalVol = converted.reduce((s, sw) => s + sw.volumeMON, 0);
           log('monad-tracker', `Backfilled ${label} via API: ${converted.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+          await dbClearMonadSwaps(addr);
           await dbInsertMonadSwaps(converted);
           state.backfilling = false;
           return;
@@ -439,6 +484,43 @@ class MonadTokenTracker extends EventEmitter {
     }
   }
 
+  private async pollApi() {
+    const graduated = Array.from(this.tokens.entries())
+      .filter(([, s]) => s.meta?.graduated)
+      .map(([addr]) => addr);
+    if (graduated.length === 0) return;
+
+    for (const addr of graduated) {
+      try {
+        const state = this.tokens.get(addr);
+        if (!state) continue;
+
+        const latestTs = state.swaps.length > 0
+          ? Math.floor(state.swaps[state.swaps.length - 1].timestamp / 1000)
+          : Math.floor((Date.now() - 60_000) / 1000);
+
+        const apiSwaps = await getSwapHistorySince(addr, latestTs);
+        if (apiSwaps.length === 0) continue;
+
+        const converted = apiSwapsToRecords(addr, apiSwaps);
+        const existingHashes = new Set(state.swaps.map(s => s.txHash));
+        const newSwaps = converted.filter(s => !existingHashes.has(s.txHash));
+        if (newSwaps.length === 0) continue;
+
+        newSwaps.sort((a, b) => a.timestamp - b.timestamp);
+        state.swaps.push(...newSwaps);
+
+        for (const swap of newSwaps) this.emit('swap', swap);
+        dbInsertMonadSwaps(newSwaps).catch(() => {});
+
+        const label = state.meta?.symbol || addr.slice(0, 10);
+        log('monad-tracker', `API poll ${label}: ${newSwaps.length} new swap(s)`);
+      } catch (err) {
+        logError('monad-tracker', `API poll ${addr.slice(0, 10)}: ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+    }
+  }
+
   private prune() {
     const cutoff = Date.now() - MAX_AGE_MS;
     for (const state of this.tokens.values()) {
@@ -494,6 +576,7 @@ class MonadTokenTracker extends EventEmitter {
 
   stop() {
     if (this.interval) clearInterval(this.interval);
+    if (this.apiInterval) clearInterval(this.apiInterval);
     this.started = false;
   }
 }
