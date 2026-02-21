@@ -122,7 +122,7 @@ export function evaluateRule(
       case 'Notify':
         return `Notify ${a.config.channel || 'channel'}`;
       case 'Recommend Swap':
-        return `Recommend: swap $${a.config.amount || '?'} into ${a.config.token || 'token'}`;
+        return `Recommend: swap ${a.config.amount || '?'} ${a.config.token || 'token'}`;
       default:
         return a.type;
     }

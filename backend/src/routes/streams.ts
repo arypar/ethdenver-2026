@@ -5,7 +5,7 @@ import { tracker } from '../lib/pool-tracker.js';
 import { monadTracker } from '../lib/monad-tracker.js';
 import { log, logError } from '../lib/log.js';
 import { getCachedPool } from '../lib/pool-cache.js';
-import { createPublicClient, http, erc20Abi, type Address } from 'viem';
+import { createPublicClient, http, erc20Abi, parseAbiItem, type Address } from 'viem';
 import { mainnet } from 'viem/chains';
 
 const tvlRpc = createPublicClient({
@@ -81,6 +81,211 @@ const tvlRpc = createPublicClient({
  */
 
 const router = Router();
+
+const SLOT0_ABI = [
+  {
+    inputs: [], name: 'slot0', stateMutability: 'view', type: 'function',
+    outputs: [
+      { type: 'uint160', name: 'sqrtPriceX96' },
+      { type: 'int24', name: 'tick' },
+      { type: 'uint16', name: 'observationIndex' },
+      { type: 'uint16', name: 'observationCardinality' },
+      { type: 'uint16', name: 'observationCardinalityNext' },
+      { type: 'uint8', name: 'feeProtocol' },
+      { type: 'bool', name: 'unlocked' },
+    ],
+  },
+] as const;
+
+const STABLECOINS = new Set(['USDC', 'USDT', 'DAI']);
+
+const WETH_USDC_POOL = '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640' as Address;
+
+async function getEthPriceUsd(): Promise<number> {
+  try {
+    const slot0 = await tvlRpc.readContract({
+      address: WETH_USDC_POOL, abi: SLOT0_ABI, functionName: 'slot0',
+    });
+    const sqrtPrice = Number(slot0[0]) / 2 ** 96;
+    const rawPrice = sqrtPrice * sqrtPrice;
+    return 1e12 / rawPrice;
+  } catch {
+    return 0;
+  }
+}
+
+function computeUsdTvl(
+  bal0: bigint, bal1: bigint,
+  dec0: number, dec1: number,
+  sym0: string, sym1: string,
+  sqrtPriceX96: bigint,
+  ethPriceUsd: number,
+): { usd0: number; usd1: number; total: number } {
+  const bal0Human = Number(bal0) / 10 ** dec0;
+  const bal1Human = Number(bal1) / 10 ** dec1;
+
+  const sqrtPrice = Number(sqrtPriceX96) / 2 ** 96;
+  const rawPrice = sqrtPrice * sqrtPrice;
+  const token1PriceInToken0 = (rawPrice === 0) ? 0 : 1 / (rawPrice * 10 ** (dec0 - dec1));
+
+  const s0Stable = STABLECOINS.has(sym0);
+  const s1Stable = STABLECOINS.has(sym1);
+  const s0Eth = sym0 === 'WETH' || sym0 === 'ETH';
+  const s1Eth = sym1 === 'WETH' || sym1 === 'ETH';
+
+  let usd0 = 0;
+  let usd1 = 0;
+
+  if (s0Stable) {
+    usd0 = bal0Human;
+    usd1 = bal1Human * token1PriceInToken0;
+  } else if (s1Stable) {
+    const token0PriceInToken1 = rawPrice * 10 ** (dec0 - dec1);
+    usd0 = bal0Human * token0PriceInToken1;
+    usd1 = bal1Human;
+  } else if (s0Eth && ethPriceUsd > 0) {
+    usd0 = bal0Human * ethPriceUsd;
+    usd1 = bal1Human * token1PriceInToken0 * ethPriceUsd;
+  } else if (s1Eth && ethPriceUsd > 0) {
+    const token0PriceInToken1 = rawPrice * 10 ** (dec0 - dec1);
+    usd0 = bal0Human * token0PriceInToken1 * ethPriceUsd;
+    usd1 = bal1Human * ethPriceUsd;
+  }
+
+  return { usd0, usd1, total: usd0 + usd1 };
+}
+
+// ── Uniswap V3 pool event ABIs for direct RPC log fetching ──
+const MintEventAbi = parseAbiItem(
+  'event Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)',
+);
+const BurnEventAbi = parseAbiItem(
+  'event Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount, uint256 amount0, uint256 amount1)',
+);
+const CollectEventAbi = parseAbiItem(
+  'event Collect(address indexed owner, address recipient, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount0, uint128 amount1)',
+);
+
+const backfillState = new Map<string, { lastBlock: number; lastFetchMs: number }>();
+const BACKFILL_COOLDOWN_MS = 30_000;
+const BACKFILL_LOOKBACK = 2000;
+
+async function backfillLiquidityEvents(poolAddress: string): Promise<any[]> {
+  const pool = poolAddress.toLowerCase() as Address;
+  const now = Date.now();
+  const state = backfillState.get(pool);
+
+  if (state && now - state.lastFetchMs < BACKFILL_COOLDOWN_MS) return [];
+
+  try {
+    const currentBlock = await tvlRpc.getBlockNumber();
+    const fromBlock = state?.lastBlock
+      ? BigInt(state.lastBlock + 1)
+      : currentBlock - BigInt(BACKFILL_LOOKBACK);
+
+    if (fromBlock > currentBlock) {
+      backfillState.set(pool, { lastBlock: Number(currentBlock), lastFetchMs: now });
+      return [];
+    }
+
+    const [mintLogs, burnLogs, collectLogs] = await Promise.all([
+      tvlRpc.getLogs({ address: pool, event: MintEventAbi, fromBlock, toBlock: 'latest' }),
+      tvlRpc.getLogs({ address: pool, event: BurnEventAbi, fromBlock, toBlock: 'latest' }),
+      tvlRpc.getLogs({ address: pool, event: CollectEventAbi, fromBlock, toBlock: 'latest' }),
+    ]);
+
+    const allLogs = [...mintLogs, ...burnLogs, ...collectLogs];
+    if (allLogs.length === 0) {
+      backfillState.set(pool, { lastBlock: Number(currentBlock), lastFetchMs: now });
+      return [];
+    }
+
+    const uniqueBlockNums = [...new Set(allLogs.map(l => l.blockNumber))];
+    const blockTimestamps = new Map<bigint, string>();
+    for (let i = 0; i < uniqueBlockNums.length; i += 10) {
+      const batch = uniqueBlockNums.slice(i, i + 10);
+      const blocks = await Promise.all(batch.map(bn => tvlRpc.getBlock({ blockNumber: bn })));
+      blocks.forEach((b, j) => {
+        blockTimestamps.set(batch[j], new Date(Number(b.timestamp) * 1000).toISOString());
+      });
+    }
+
+    const rows: any[] = [];
+
+    for (const l of mintLogs) {
+      rows.push({
+        chain: 'eth', pool_address: pool, event_type: 'mint',
+        owner: String(l.args.owner || ''),
+        tick_lower: Number(l.args.tickLower ?? 0),
+        tick_upper: Number(l.args.tickUpper ?? 0),
+        amount: String(l.args.amount ?? '0'),
+        amount0: String(l.args.amount0 ?? '0'),
+        amount1: String(l.args.amount1 ?? '0'),
+        block_number: Number(l.blockNumber),
+        tx_hash: l.transactionHash,
+        block_timestamp: blockTimestamps.get(l.blockNumber) || new Date().toISOString(),
+      });
+    }
+    for (const l of burnLogs) {
+      rows.push({
+        chain: 'eth', pool_address: pool, event_type: 'burn',
+        owner: String(l.args.owner || ''),
+        tick_lower: Number(l.args.tickLower ?? 0),
+        tick_upper: Number(l.args.tickUpper ?? 0),
+        amount: String(l.args.amount ?? '0'),
+        amount0: String(l.args.amount0 ?? '0'),
+        amount1: String(l.args.amount1 ?? '0'),
+        block_number: Number(l.blockNumber),
+        tx_hash: l.transactionHash,
+        block_timestamp: blockTimestamps.get(l.blockNumber) || new Date().toISOString(),
+      });
+    }
+    for (const l of collectLogs) {
+      rows.push({
+        chain: 'eth', pool_address: pool, event_type: 'collect',
+        owner: String(l.args.owner || ''),
+        tick_lower: Number(l.args.tickLower ?? 0),
+        tick_upper: Number(l.args.tickUpper ?? 0),
+        amount: '0',
+        amount0: String(l.args.amount0 ?? '0'),
+        amount1: String(l.args.amount1 ?? '0'),
+        block_number: Number(l.blockNumber),
+        tx_hash: l.transactionHash,
+        block_timestamp: blockTimestamps.get(l.blockNumber) || new Date().toISOString(),
+      });
+    }
+
+    rows.sort((a, b) => b.block_number - a.block_number);
+
+    if (DB_ENABLED && supabase && rows.length > 0) {
+      const existingResult = await supabase
+        .from('liquidity_events')
+        .select('tx_hash, event_type, tick_lower, tick_upper')
+        .eq('pool_address', pool)
+        .gte('block_number', Number(fromBlock));
+      const existingKeys = new Set(
+        (existingResult.data || []).map(
+          (r: any) => `${r.tx_hash}:${r.event_type}:${r.tick_lower}:${r.tick_upper}`,
+        ),
+      );
+      const newRows = rows.filter(
+        r => !existingKeys.has(`${r.tx_hash}:${r.event_type}:${r.tick_lower}:${r.tick_upper}`),
+      );
+      if (newRows.length > 0) {
+        const { error } = await supabase.from('liquidity_events').insert(newRows);
+        if (error) logError('streams', `Backfill DB insert: ${error.message}`);
+      }
+    }
+
+    backfillState.set(pool, { lastBlock: Number(currentBlock), lastFetchMs: now });
+    log('streams', `[eth] Backfilled ${rows.length} liquidity event(s) for ${pool.slice(0, 10)}... (blocks ${fromBlock}..${currentBlock})`);
+    return rows;
+  } catch (err: any) {
+    logError('streams', `Backfill error for ${pool}: ${err.message}`);
+    backfillState.set(pool, { lastBlock: state?.lastBlock || 0, lastFetchMs: now });
+    return [];
+  }
+}
 
 // ── Monad Uniswap router addresses ──
 const MONAD_ROUTERS = new Set([
@@ -408,13 +613,24 @@ router.get('/transactions', async (req, res) => {
 });
 
 // ── GET /liquidity/events ── paginated liquidity events
+// Falls back to direct RPC log fetching when the DB has no events for the pool.
 router.get('/liquidity/events', async (req, res) => {
   const chain = (req.query.chain as string) || 'eth';
   const pool = req.query.pool as string | undefined;
   const limit = Math.min(Number(req.query.limit) || 50, 200);
 
   if (!DB_ENABLED || !supabase) {
-    res.json({ events: [], total: 0 });
+    if (pool && chain === 'eth') {
+      try {
+        let events = await backfillLiquidityEvents(pool);
+        events = events.slice(0, limit);
+        res.json({ events, total: events.length });
+      } catch {
+        res.json({ events: [], total: 0 });
+      }
+    } else {
+      res.json({ events: [], total: 0 });
+    }
     return;
   }
 
@@ -433,6 +649,28 @@ router.get('/liquidity/events', async (req, res) => {
     logError('streams', `Liq query error: ${error.message}`);
     res.status(500).json({ error: error.message });
     return;
+  }
+
+  if ((!data || data.length === 0) && pool && chain === 'eth') {
+    try {
+      await backfillLiquidityEvents(pool);
+      const { data: freshData, count: freshCount } = await supabase
+        .from('liquidity_events')
+        .select('*', { count: 'exact' })
+        .eq('chain', chain)
+        .eq('pool_address', pool.toLowerCase())
+        .order('block_number', { ascending: false })
+        .limit(limit);
+      res.json({ events: freshData ?? [], total: freshCount ?? 0 });
+      return;
+    } catch {
+      // fall through to return empty
+    }
+  }
+
+  // Trigger background refresh for subsequent polls (non-blocking)
+  if (pool && chain === 'eth') {
+    backfillLiquidityEvents(pool).catch(() => {});
   }
 
   res.json({ events: data ?? [], total: count ?? 0 });
@@ -482,7 +720,7 @@ router.get('/liquidity/tvl', async (req, res) => {
   }
 
   try {
-    const [bal0, bal1] = await Promise.all([
+    const [bal0, bal1, slot0Result] = await Promise.all([
       tvlRpc.readContract({
         address: token0Addr,
         abi: erc20Abi,
@@ -495,6 +733,11 @@ router.get('/liquidity/tvl', async (req, res) => {
         functionName: 'balanceOf',
         args: [poolAddr],
       }),
+      tvlRpc.readContract({
+        address: poolAddr,
+        abi: SLOT0_ABI,
+        functionName: 'slot0',
+      }).catch(() => null),
     ]);
 
     let eventCount = 0;
@@ -507,8 +750,24 @@ router.get('/liquidity/tvl', async (req, res) => {
       eventCount = count ?? 0;
     }
 
+    let tvlUsd: { usd0: number; usd1: number; total: number } | undefined;
+    const meta = poolName ? getCachedPool(poolName) : undefined;
+    if (slot0Result && meta) {
+      const sqrtPriceX96 = slot0Result[0];
+      const needsEthPrice = !STABLECOINS.has(meta.token0Symbol) && !STABLECOINS.has(meta.token1Symbol);
+      const ethPriceUsd = needsEthPrice ? await getEthPriceUsd() : 0;
+      tvlUsd = computeUsdTvl(
+        bal0, bal1,
+        meta.decimals0, meta.decimals1,
+        meta.token0Symbol, meta.token1Symbol,
+        sqrtPriceX96,
+        ethPriceUsd,
+      );
+    }
+
     res.json({
       tvl: { amount0: bal0.toString(), amount1: bal1.toString() },
+      tvlUsd,
       eventCount,
     });
   } catch (err: any) {

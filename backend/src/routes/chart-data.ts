@@ -121,29 +121,34 @@ router.post('/chart-data', async (req, res) => {
     const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
 
     let swaps: SwapRecord[];
+    let backfilling = false;
 
     if (DB_ENABLED) {
       swaps = await dbQuerySwaps(pool, sinceMs);
       log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps from DB`);
 
-      if (swaps.length === 0) {
-        log('chart-data', `${pool} ${metric} ${range} — DB empty, triggering chain backfill...`);
-        await tracker.backfill(pool, config.blocksBack);
-        swaps = await dbQuerySwaps(pool, sinceMs);
-        log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps after backfill`);
+      if (swaps.length === 0 && !tracker.hasBackfill(pool, config.blocksBack)) {
+        log('chart-data', `${pool} ${metric} ${range} — DB empty, triggering background backfill`);
+        tracker.backfill(pool, config.blocksBack).catch(err =>
+          logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
+        );
+        backfilling = true;
       }
     } else {
       if (!tracker.hasBackfill(pool, config.blocksBack)) {
-        log('chart-data', `${pool} ${metric} ${range} — triggering chain backfill...`);
-        await tracker.backfill(pool, config.blocksBack);
+        log('chart-data', `${pool} ${metric} ${range} — triggering background backfill`);
+        tracker.backfill(pool, config.blocksBack).catch(err =>
+          logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
+        );
+        backfilling = true;
       }
       swaps = tracker.getSwaps(pool, sinceMs);
       log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps from memory`);
     }
 
     if (swaps.length === 0) {
-      log('chart-data', `${pool} ${metric} ${range} — no swaps found, returning empty`);
-      res.json([]);
+      log('chart-data', `${pool} ${metric} ${range} — no swaps yet, returning empty (backfilling: ${backfilling})`);
+      res.json({ data: [], backfilling });
       return;
     }
 
@@ -177,7 +182,7 @@ router.post('/chart-data', async (req, res) => {
     });
 
     log('chart-data', `${pool} ${metric} ${range} — served in ${Date.now() - t0}ms`);
-    res.json(dataPoints);
+    res.json({ data: dataPoints, backfilling });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logError('chart-data', message);

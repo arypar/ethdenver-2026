@@ -15,17 +15,28 @@ function formatFeeTier(fee: number): string {
   return `${(fee / 10000).toFixed(2)}%`;
 }
 
-function formatBigAmount(raw: string): string {
+function fmtRawAmount(raw: string): string {
   const n = Number(raw);
   if (n === 0) return '0';
-  if (Math.abs(n) >= 1e18) return `${(n / 1e18).toFixed(4)}`;
-  if (Math.abs(n) >= 1e15) return `${(n / 1e15).toFixed(2)}e15`;
-  if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
-  if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
-  if (Math.abs(n) < 0.01 && n !== 0) return '<0.01';
+  const abs = Math.abs(n);
+  if (abs >= 1e18) return `${(n / 1e18).toFixed(4)}`;
+  if (abs >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+  if (abs < 0.01 && n !== 0) return '<0.01';
   return n.toLocaleString();
+}
+
+function formatUsd(n: number): string {
+  if (n === 0) return '$0';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(2)}K`;
+  return `${sign}$${abs.toFixed(2)}`;
 }
 
 function truncate(addr: string, chars = 6): string {
@@ -79,7 +90,7 @@ function EventRow({ event }: { event: LiquidityEvent }) {
       </span>
 
       <span className="text-white/40 text-[11px] truncate">
-        a0: {formatBigAmount(event.amount0)} / a1: {formatBigAmount(event.amount1)}
+        a0: {fmtRawAmount(event.amount0)} / a1: {fmtRawAmount(event.amount1)}
       </span>
 
       <span className="text-white/25 text-[11px] ml-auto shrink-0">
@@ -95,7 +106,7 @@ export function LpInfoCard({ lpData, onClose }: LpInfoCardProps) {
   const poolName = lpData.token0Symbol && lpData.token1Symbol
     ? `${lpData.token0Symbol}/${lpData.token1Symbol}`
     : '';
-  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(
+  const { events, tvl, tvlUsd, stats, loading, wsConnected } = usePoolLiquidityMonitor(
     poolAddress,
     'eth',
     poolName,
@@ -154,12 +165,12 @@ export function LpInfoCard({ lpData, onClose }: LpInfoCardProps) {
           </div>
         ))}
         <div>
-          <div className="text-[9px] font-medium uppercase tracking-[0.06em] text-white/25">TVL Token0</div>
-          <div className="text-[13px] font-mono text-white/60">{formatBigAmount(tvl.amount0)}</div>
+          <div className="text-[9px] font-medium uppercase tracking-[0.06em] text-white/25">{lpData.token0Symbol} TVL</div>
+          <div className="text-[13px] font-mono text-white/60">{formatUsd(tvlUsd.usd0)}</div>
         </div>
         <div>
-          <div className="text-[9px] font-medium uppercase tracking-[0.06em] text-white/25">TVL Token1</div>
-          <div className="text-[13px] font-mono text-white/60">{formatBigAmount(tvl.amount1)}</div>
+          <div className="text-[9px] font-medium uppercase tracking-[0.06em] text-white/25">{lpData.token1Symbol} TVL</div>
+          <div className="text-[13px] font-mono text-white/60">{formatUsd(tvlUsd.usd1)}</div>
         </div>
       </div>
 

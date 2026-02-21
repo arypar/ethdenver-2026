@@ -7,8 +7,8 @@ import { EventEmitter } from 'events';
 
 const RPC_URL = process.env.ETH_RPC_URL || 'https://ethereum-rpc.publicnode.com';
 const POLL_MS = 4_000;
-const LOG_CHUNK_SIZE = 2000;
-const CONCURRENCY = 3;
+const LOG_CHUNK_SIZE = 5000;
+const CONCURRENCY = 5;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const SECS_PER_BLOCK = 12;
 const INITIAL_BACKFILL_BLOCKS = Math.round((7 * 24 * 60 * 60) / SECS_PER_BLOCK); // ~50400 (7 days)
@@ -278,16 +278,15 @@ class PoolTracker extends EventEmitter {
     return !!state && state.backfillBlocks >= blocksNeeded;
   }
 
+  isBackfilling(poolName: string): boolean {
+    return this.pools.get(poolName)?.backfilling ?? false;
+  }
+
   async backfill(poolName: string, blocksBack: number): Promise<void> {
     const state = this.pools.get(poolName);
     if (!state) return;
     if (state.backfillBlocks >= blocksBack) return;
-    if (state.backfilling) {
-      while (state.backfilling) {
-        await new Promise(r => setTimeout(r, 500));
-      }
-      if (state.backfillBlocks >= blocksBack) return;
-    }
+    if (state.backfilling) return; // don't wait — callers should check isBackfilling()
 
     state.backfilling = true;
 
@@ -302,7 +301,6 @@ class PoolTracker extends EventEmitter {
           log('tracker', `${poolName} — loaded ${dbSwaps.length} swaps from DB | vol $${vols.toFixed(2)} | price range $${Math.min(...prices).toFixed(2)}–$${Math.max(...prices).toFixed(2)}`);
           state.swaps = dbSwaps;
           state.backfillBlocks = blocksBack;
-          state.backfilling = false;
           return;
         }
       }
@@ -313,17 +311,21 @@ class PoolTracker extends EventEmitter {
       const startBlock = currentBlock - BigInt(blocksBack);
       const now = Date.now();
 
-      const logs = await this.fetchLogs(state.meta.address, startBlock, currentBlock);
+      const onBatchComplete = (batchLogs: any[]) => {
+        const batchSwaps: SwapRecord[] = [];
+        for (const entry of batchLogs) {
+          const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
+          const timestamp = now - blockDiff * SECS_PER_BLOCK * 1000;
+          batchSwaps.push(parseSwapLog(entry, poolName, state.meta, timestamp));
+        }
+        if (batchSwaps.length > 0) {
+          state.swaps.push(...batchSwaps);
+          state.swaps.sort((a, b) => a.blockNumber - b.blockNumber);
+          dbInsertSwaps(batchSwaps).catch(() => {});
+        }
+      };
 
-      const newSwaps: SwapRecord[] = [];
-      for (const entry of logs) {
-        const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
-        const timestamp = now - blockDiff * SECS_PER_BLOCK * 1000;
-        newSwaps.push(parseSwapLog(entry, poolName, state.meta, timestamp));
-      }
-
-      state.swaps = newSwaps;
-      state.swaps.sort((a, b) => a.blockNumber - b.blockNumber);
+      await this.fetchLogs(state.meta.address, startBlock, currentBlock, onBatchComplete);
 
       const seen = new Set<string>();
       state.swaps = state.swaps.filter(s => {
@@ -344,9 +346,6 @@ class PoolTracker extends EventEmitter {
       } else {
         log('tracker', `Backfilled ${poolName}: 0 swaps found on chain`);
       }
-
-      await dbInsertSwaps(state.swaps);
-      log('db', `Persisted ${state.swaps.length} backfill swaps for ${poolName}`);
     } catch (err) {
       logError('tracker', `Backfill failed for ${poolName}: ${err instanceof Error ? err.message : 'unknown'}`);
     } finally {
@@ -440,7 +439,7 @@ class PoolTracker extends EventEmitter {
     }
   }
 
-  private async fetchLogs(address: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<any[]> {
+  private async fetchLogs(address: `0x${string}`, fromBlock: bigint, toBlock: bigint, onBatch?: (logs: any[]) => void): Promise<void> {
     const chunks: Array<{ from: bigint; to: bigint }> = [];
     let from = fromBlock;
     while (from <= toBlock) {
@@ -449,7 +448,6 @@ class PoolTracker extends EventEmitter {
       from = to + BigInt(1);
     }
 
-    const allLogs: any[] = [];
     for (let i = 0; i < chunks.length; i += CONCURRENCY) {
       const batch = chunks.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
@@ -457,9 +455,10 @@ class PoolTracker extends EventEmitter {
           rpcClient.getLogs({ address, event: SWAP_EVENT, fromBlock: f, toBlock: t }),
         ),
       );
-      for (const logs of results) allLogs.push(...logs);
+      const batchLogs: any[] = [];
+      for (const logs of results) batchLogs.push(...logs);
+      if (onBatch) onBatch(batchLogs);
     }
-    return allLogs;
   }
 
   stop() {

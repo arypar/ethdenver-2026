@@ -136,9 +136,10 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
 
   if (block.type === 'Recommend Swap') {
     const tokens = poolTokens && poolTokens.length > 0 ? poolTokens : ['Token A', 'Token B'];
+    const selectedToken = String(block.config.token || '');
     return (
       <div className="flex flex-col gap-1.5">
-        <Select value={String(block.config.token || '')} onValueChange={v => updateField('token', v)}>
+        <Select value={selectedToken} onValueChange={v => updateField('token', v)}>
           <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm">
             <SelectValue placeholder="Token" />
           </SelectTrigger>
@@ -147,14 +148,16 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
           </SelectContent>
         </Select>
         <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
           <Input
             type="number"
             value={String(block.config.amount || '')}
             onChange={e => updateField('amount', e.target.value)}
             placeholder="Amount"
-            className={cn(INPUT_CLASS, 'w-full pl-6')}
+            className={cn(INPUT_CLASS, 'w-full', selectedToken ? 'pr-16' : '')}
           />
+          {selectedToken && (
+            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">{selectedToken}</span>
+          )}
         </div>
       </div>
     );

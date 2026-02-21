@@ -18,7 +18,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} antialiased font-sans`}>
+      <body suppressHydrationWarning className={`${inter.variable} antialiased font-sans`}>
         <Providers>{children}</Providers>
       </body>
     </html>

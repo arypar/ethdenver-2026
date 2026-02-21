@@ -10,25 +10,16 @@ interface ActionDetailDialogProps {
   open: boolean;
   onClose: () => void;
   onExecute: (id: string) => void;
-  onUpdateStatus?: (id: string, status: import('@/lib/types').ActionStatus) => void;
   connected: boolean;
   onConnectRequired: () => void;
 }
 
-export function ActionDetailDialog({ action, open, onClose, onExecute, onUpdateStatus, connected, onConnectRequired }: ActionDetailDialogProps) {
+export function ActionDetailDialog({ action, open, onClose, onExecute, connected, onConnectRequired }: ActionDetailDialogProps) {
   if (!action) return null;
-
-  const isSwap = (action.details.actionTypes ?? []).some(
-    t => t === 'Recommend Swap' || t === 'Auto Swap',
-  );
 
   const handleExecute = () => {
     if (!connected) { onConnectRequired(); return; }
-    if (isSwap) {
-      onExecute(action.id);
-    } else {
-      onUpdateStatus?.(action.id, 'Completed');
-    }
+    onExecute(action.id);
     onClose();
   };
 

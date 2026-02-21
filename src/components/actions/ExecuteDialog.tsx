@@ -1,6 +1,7 @@
 'use client';
 
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import {
   CheckCircle2, Loader2, AlertTriangle, ArrowDownUp,
   ExternalLink, RefreshCw, Shield, Fuel,
@@ -184,8 +185,14 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool }: Execute
     <Dialog open={open} onOpenChange={v => !v && handleClose()}>
       <DialogContent
         showCloseButton={step !== 'quoting' && step !== 'approving' && step !== 'swapping'}
-        className="sm:max-w-[460px] rounded-2xl border-white/[0.08] bg-[#0D0D16]/98 backdrop-blur-2xl p-0 gap-0"
+        className="sm:max-w-[460px] rounded-2xl p-0 gap-0 border-0 shadow-2xl"
+        style={{
+          backgroundColor: '#0D0D16',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 0 80px rgba(0, 0, 0, 0.6), 0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        }}
       >
+        <VisuallyHidden><DialogTitle>Swap</DialogTitle></VisuallyHidden>
         {/* Header gradient */}
         <div className="relative px-5 pt-5 pb-4">
           <div className="absolute inset-0 bg-gradient-to-b from-[#FF007A]/[0.06] to-transparent pointer-events-none" />

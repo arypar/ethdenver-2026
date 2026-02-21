@@ -63,8 +63,8 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchChartData(genConfig.metric, genConfig.pool, genConfig.range, chain);
-      if (data.length === 0) {
+      const { data, backfilling } = await fetchChartData(genConfig.metric, genConfig.pool, genConfig.range, chain);
+      if (data.length === 0 && !backfilling) {
         setError(`No swap activity for ${pool} in the last 24H. Try a wider time range or a more active pair.`);
         return;
       }
@@ -74,6 +74,7 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
         config: genConfig,
         data,
         createdAt: Date.now(),
+        backfilling,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch chart data');
@@ -86,12 +87,12 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchChartData(config.metric, config.pool, config.range, chain);
+      const { data, backfilling } = await fetchChartData(config.metric, config.pool, config.range, chain);
       const resolved = resolvedTokenRef.current;
       const label = isMonad
         ? (resolved ? `$${resolved.symbol}` : `${config.pool.slice(0, 8)}...`)
         : config.pool;
-      if (data.length === 0) {
+      if (data.length === 0 && !backfilling) {
         setError(`No swap activity for ${label} in the last ${config.range}. Try a wider time range or a more active token.`);
         return;
       }
@@ -101,6 +102,7 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
         config: { ...config, chain },
         data,
         createdAt: Date.now(),
+        backfilling,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch chart data');

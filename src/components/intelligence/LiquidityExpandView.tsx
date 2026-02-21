@@ -7,7 +7,7 @@ import {
   Wallet, ArrowUpRight, ArrowDownRight, Clock, Hash,
   Activity, Layers, Filter,
 } from 'lucide-react';
-import { usePoolLiquidityMonitor, type LiquidityEvent } from '@/lib/use-pool-liquidity-monitor';
+import { usePoolLiquidityMonitor, type LiquidityEvent, type TvlUsd } from '@/lib/use-pool-liquidity-monitor';
 import { TOKENS } from '@/lib/tokens';
 import type { SavedChart } from '@/lib/types';
 
@@ -64,6 +64,17 @@ function truncAddr(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function formatUsd(n: number): string {
+  if (n === 0) return '$0';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(2)}K`;
+  return `${sign}$${abs.toFixed(2)}`;
+}
+
 const EVENT_META: Record<string, { label: string; color: string; bg: string; border: string; icon: typeof TrendingUp }> = {
   mint:    { label: 'Add Liquidity',    color: 'text-emerald-400', bg: 'bg-emerald-500/8',  border: 'border-emerald-500/20', icon: ArrowUpRight },
   burn:    { label: 'Remove Liquidity', color: 'text-red-400',     bg: 'bg-red-500/8',      border: 'border-red-500/20',     icon: ArrowDownRight },
@@ -77,7 +88,7 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
   const poolName = chart?.config.pool ?? '';
   const { sym0, dec0, sym1, dec1 } = getTokenInfo(poolName);
 
-  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
+  const { events, tvl, tvlUsd, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
 
   const filteredEvents = useMemo(
     () => filter === 'all' ? events : events.filter(e => e.event_type === filter),
@@ -89,8 +100,8 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
   const removePct = totalEvents > 0 ? (stats.burns / totalEvents) * 100 : 0;
   const collectPct = totalEvents > 0 ? (stats.collects / totalEvents) * 100 : 0;
 
-  const humanTvl0 = fmtAmount(tvl.amount0, dec0);
-  const humanTvl1 = fmtAmount(tvl.amount1, dec1);
+  const humanTvl0 = formatUsd(tvlUsd.usd0);
+  const humanTvl1 = formatUsd(tvlUsd.usd1);
 
   if (!chart) return null;
 

@@ -19,6 +19,8 @@ export interface SavedChart {
   config: ChartConfig;
   data: ChartDataPoint[];
   createdAt: number;
+  backfilling?: boolean;
+  backfillProgress?: number;
 }
 
 export interface ChartDataPoint {

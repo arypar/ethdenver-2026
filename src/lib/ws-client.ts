@@ -1,6 +1,7 @@
 'use client';
 
 type SwapHandler = (swap: any) => void;
+type BackfillHandler = (data: { pool: string; progress?: number }) => void;
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
@@ -10,6 +11,8 @@ const RECONNECT_MAX_MS = 30_000;
 class WsClient {
   private ws: WebSocket | null = null;
   private subscriptions = new Map<string, Set<SwapHandler>>();
+  private backfillProgressHandlers = new Set<BackfillHandler>();
+  private backfillCompleteHandlers = new Set<BackfillHandler>();
   private subscribedPools = new Set<string>();
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -54,6 +57,10 @@ class WsClient {
               handler(data);
             }
           }
+        } else if (data.type === 'backfill_progress') {
+          for (const handler of this.backfillProgressHandlers) handler(data);
+        } else if (data.type === 'backfill_complete') {
+          for (const handler of this.backfillCompleteHandlers) handler(data);
         }
       } catch {
         // ignore
@@ -98,6 +105,16 @@ class WsClient {
         }
       }
     };
+  }
+
+  onBackfillProgress(handler: BackfillHandler): () => void {
+    this.backfillProgressHandlers.add(handler);
+    return () => { this.backfillProgressHandlers.delete(handler); };
+  }
+
+  onBackfillComplete(handler: BackfillHandler): () => void {
+    this.backfillCompleteHandlers.add(handler);
+    return () => { this.backfillCompleteHandlers.delete(handler); };
   }
 
   onConnectionChange(listener: (connected: boolean) => void): () => void {

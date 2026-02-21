@@ -20,12 +20,13 @@ interface ChartCardProps {
   onExpand: (chart: SavedChart) => void;
 }
 
-function ChartTooltip({ active, payload, metric, range }: { active?: boolean; payload?: Array<{ value: number; payload: ChartDataPoint }>; metric: string; range?: string }) {
+function ChartTooltip({ active, payload, metric, range, chain }: { active?: boolean; payload?: Array<{ value: number; payload: ChartDataPoint }>; metric: string; range?: string; chain?: string }) {
   if (!active || !payload?.[0]) return null;
   const point = payload[0].payload;
   const showPrice = metric !== 'Price' && point.price != null && point.price > 0;
   const interval = range ? BUCKET_DURATION[range] : undefined;
   const metricLabel = metric === 'Swap Count' ? 'Swaps' : metric;
+  const chainId = (chain || 'eth') as ChartConfig['chain'];
   return (
     <div className="rounded-lg border border-white/[0.1] bg-black/80 px-3 py-2 backdrop-blur-xl shadow-xl">
       {point.block && (
@@ -33,10 +34,10 @@ function ChartTooltip({ active, payload, metric, range }: { active?: boolean; pa
       )}
       <p className="text-[10px] text-white/40 mb-0.5">{point.time}{interval ? ` (${interval} bucket)` : ''}</p>
       <p className="text-[14px] font-bold text-white">
-        {metricLabel}: {formatValue(payload[0].value, metric as ChartConfig['metric'])}
+        {metricLabel}: {formatValue(payload[0].value, metric as ChartConfig['metric'], chainId)}
       </p>
       {showPrice && (
-        <p className="text-[11px] text-white/50 mt-0.5">Price: {formatValue(point.price!, 'Price')}</p>
+        <p className="text-[11px] text-white/50 mt-0.5">Price: {formatValue(point.price!, 'Price', chainId)}</p>
       )}
     </div>
   );
@@ -112,7 +113,7 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
           <CartesianGrid {...grid} />
           <XAxis {...xAxis} />
           <YAxis {...yAxis} />
-          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
           <Bar dataKey="value" fill="#FF007A" opacity={0.85} radius={[3, 3, 0, 0]} animationDuration={300} />
         </BarChart>
       );
@@ -123,7 +124,7 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
           <CartesianGrid {...grid} />
           <XAxis {...xAxis} />
           <YAxis {...yAxis} />
-          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} />} />
+          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} />
           <Line
             type="monotone" dataKey="value" stroke="#FF007A" strokeWidth={2}
             dot={false} activeDot={{ r: 4, fill: '#FF007A', stroke: '#fff', strokeWidth: 1.5 }}
@@ -140,7 +141,7 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
         <CartesianGrid {...grid} />
         <XAxis {...xAxis} />
         <YAxis {...yAxis} />
-        <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} />} />
+        <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} />
         <defs>
           <linearGradient id={`af-${chartId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#FF007A" stopOpacity={0.25} />
@@ -265,12 +266,21 @@ function LiqEventRow({ event, sym0, dec0, sym1, dec1 }: {
   );
 }
 
+function formatUsd(n: number): string {
+  if (n === 0) return '$0';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(2)}K`;
+  return `${sign}$${abs.toFixed(2)}`;
+}
+
 function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolName: string }) {
-  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
+  const { events, tvl, tvlUsd, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
   const { sym0, dec0, sym1, dec1 } = getPoolTokenInfo(poolName);
 
-  const humanTvl0 = formatTokenAmount(tvl.amount0, dec0);
-  const humanTvl1 = formatTokenAmount(tvl.amount1, dec1);
   const totalEvents = stats.mints + stats.burns + stats.collects;
 
   return (
@@ -291,11 +301,11 @@ function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolNam
         </div>
         <div className="min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym0} TVL</div>
-          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{humanTvl0}</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{formatUsd(tvlUsd.usd0)}</div>
         </div>
         <div className="min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym1} TVL</div>
-          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{humanTvl1}</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{formatUsd(tvlUsd.usd1)}</div>
         </div>
       </div>
 
@@ -433,7 +443,21 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
               <div className="h-[240px] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
-                  <span className="text-[12px] text-white/30">Loading on-chain data...</span>
+                  {chart.backfilling ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-[12px] text-white/30">
+                        Backfilling {config.range} data{chart.backfillProgress != null ? `... ${chart.backfillProgress}%` : '...'}
+                      </span>
+                      <div className="w-32 h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#FF007A] transition-all duration-500 ease-out"
+                          style={{ width: `${chart.backfillProgress ?? 5}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-[12px] text-white/30">Loading on-chain data...</span>
+                  )}
                 </div>
               </div>
             ) : (

@@ -63,7 +63,7 @@ function evaluateCondition(condition: RuleCondition, swap: SwapRecord): { met: b
 function buildProposedAction(a: RuleAction): string {
   switch (a.type) {
     case 'Create Alert': return a.config.message || 'Alert triggered';
-    case 'Recommend Swap': return `Recommend: swap $${a.config.amount || '?'} into ${a.config.token || 'token'}`;
+    case 'Recommend Swap': return `Recommend: swap ${a.config.amount || '?'} ${a.config.token || 'token'}`;
     default: return a.type;
   }
 }

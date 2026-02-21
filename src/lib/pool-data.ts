@@ -2,12 +2,17 @@ import type { ChartDataPoint, ChainId, Metric, Pool, TimeRange } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
+export interface ChartDataResponse {
+  data: ChartDataPoint[];
+  backfilling: boolean;
+}
+
 export async function fetchChartData(
   metric: Metric,
   pool: Pool,
   range: TimeRange,
   chain: ChainId = 'eth',
-): Promise<ChartDataPoint[]> {
+): Promise<ChartDataResponse> {
   const endpoint = chain === 'monad' ? '/monad/chart-data' : '/uniswap/chart-data';
   const body = chain === 'monad'
     ? { token: pool, metric, range }
@@ -24,26 +29,31 @@ export async function fetchChartData(
     throw new Error(err.error || `Failed to fetch chart data: ${res.status}`);
   }
 
-  return res.json();
+  const json = await res.json();
+
+  // Handle both new envelope format and legacy array format
+  if (Array.isArray(json)) {
+    return { data: json, backfilling: false };
+  }
+  return { data: json.data ?? [], backfilling: json.backfilling ?? false };
 }
 
-export function formatValue(value: number, metric: Metric, chain: ChainId = 'eth'): string {
+export function formatValue(value: number, metric: Metric, _chain: ChainId = 'eth'): string {
   if (metric === 'Price') {
-    const prefix = chain === 'monad' ? '' : '$';
-    const suffix = chain === 'monad' ? ' MON' : '';
-    if (value >= 10_000) return `${prefix}${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}${suffix}`;
-    if (value >= 1) return `${prefix}${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${suffix}`;
-    if (value >= 0.001) return `${prefix}${value.toFixed(4)}${suffix}`;
-    return `${prefix}${value.toFixed(6)}${suffix}`;
+    if (value >= 10_000) return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    if (value >= 1) return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (value >= 0.001) return `$${value.toFixed(4)}`;
+    if (value >= 0.000001) return `$${value.toFixed(6)}`;
+    if (value > 0) return `$${value.toExponential(2)}`;
+    return '$0.00';
   }
 
   if (metric === 'Volume' || metric === 'Fees') {
-    const prefix = chain === 'monad' ? '' : '$';
-    const suffix = chain === 'monad' ? ' MON' : '';
-    if (Math.abs(value) >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(2)}M${suffix}`;
-    if (Math.abs(value) >= 1_000) return `${prefix}${(value / 1_000).toFixed(1)}K${suffix}`;
-    if (Math.abs(value) >= 1) return `${prefix}${value.toFixed(2)}${suffix}`;
-    return `${prefix}${value.toFixed(4)}${suffix}`;
+    if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+    if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+    if (Math.abs(value) >= 1) return `$${value.toFixed(2)}`;
+    if (Math.abs(value) >= 0.01) return `$${value.toFixed(2)}`;
+    return `$${value.toFixed(4)}`;
   }
 
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -53,15 +63,20 @@ export function formatValue(value: number, metric: Metric, chain: ChainId = 'eth
 
 export function formatAxisTick(value: number, metric: Metric): string {
   if (metric === 'Price') {
+    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
     if (value >= 10_000) return `$${(value / 1_000).toFixed(1)}K`;
     if (value >= 1) return `$${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
-    return `$${value.toFixed(4)}`;
+    if (value >= 0.001) return `$${value.toFixed(4)}`;
+    if (value > 0) return `$${value.toExponential(1)}`;
+    return '$0';
   }
 
   if (metric === 'Volume' || metric === 'Fees') {
     if (Math.abs(value) >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
     if (Math.abs(value) >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
+    if (Math.abs(value) >= 1) return `$${value.toFixed(0)}`;
+    if (Math.abs(value) >= 0.01) return `$${value.toFixed(2)}`;
+    return `$${value.toFixed(4)}`;
   }
 
   if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;

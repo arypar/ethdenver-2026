@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { TOKENS } from '@/lib/tokens';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
@@ -32,6 +33,12 @@ interface TVLData {
   amount1: string;
 }
 
+export interface TvlUsd {
+  usd0: number;
+  usd1: number;
+  total: number;
+}
+
 function computeStats(events: LiquidityEvent[]): PoolLiquidityStats {
   const s = { mints: 0, burns: 0, collects: 0 };
   for (const e of events) {
@@ -42,22 +49,45 @@ function computeStats(events: LiquidityEvent[]): PoolLiquidityStats {
   return s;
 }
 
+// On-chain token0 always has the numerically lower address.
+// If the pool name lists the higher-address token first (e.g. "WETH/USDC"
+// where WETH address > USDC address), the on-chain amount0/amount1 are in
+// reverse order relative to the display. Detect this and swap.
+function shouldInvert(poolName?: string): boolean {
+  if (!poolName) return false;
+  const parts = poolName.split('/');
+  if (parts.length !== 2) return false;
+  const addr0 = TOKENS[parts[0]]?.address;
+  const addr1 = TOKENS[parts[1]]?.address;
+  if (!addr0 || !addr1) return false;
+  return addr0.toLowerCase() > addr1.toLowerCase();
+}
+
+function swapEventAmounts(evt: LiquidityEvent): LiquidityEvent {
+  return { ...evt, amount0: evt.amount1, amount1: evt.amount0 };
+}
+
 export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'eth', poolName?: string) {
   const [events, setEvents] = useState<LiquidityEvent[]>([]);
   const [tvl, setTvl] = useState<TVLData>({ amount0: '0', amount1: '0' });
+  const [tvlUsd, setTvlUsd] = useState<TvlUsd>({ usd0: 0, usd1: 0, total: 0 });
   const [stats, setStats] = useState<PoolLiquidityStats>({ mints: 0, burns: 0, collects: 0 });
   const [loading, setLoading] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
 
   const poolRef = useRef(poolAddress);
   const poolNameRef = useRef(poolName);
+  const invertRef = useRef(shouldInvert(poolName));
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempt = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { poolRef.current = poolAddress; }, [poolAddress]);
-  useEffect(() => { poolNameRef.current = poolName; }, [poolName]);
+  useEffect(() => {
+    poolNameRef.current = poolName;
+    invertRef.current = shouldInvert(poolName);
+  }, [poolName]);
 
   const fetchEvents = useCallback(async () => {
     if (!poolRef.current) return;
@@ -69,8 +99,9 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
       if (!res.ok) return;
       const { events: evts } = await res.json();
       if (Array.isArray(evts)) {
-        setEvents(evts);
-        setStats(computeStats(evts));
+        const processed = invertRef.current ? evts.map(swapEventAmounts) : evts;
+        setEvents(processed);
+        setStats(computeStats(processed));
       }
     } catch { /* backend unreachable */ }
   }, []);
@@ -85,7 +116,16 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
-      if (data.tvl) setTvl(data.tvl);
+      if (data.tvl) {
+        const t = data.tvl;
+        setTvl(invertRef.current ? { amount0: t.amount1, amount1: t.amount0 } : t);
+      }
+      if (data.tvlUsd) {
+        const u = data.tvlUsd;
+        setTvlUsd(invertRef.current
+          ? { usd0: u.usd1, usd1: u.usd0, total: u.total }
+          : { usd0: u.usd0, usd1: u.usd1, total: u.total });
+      }
     } catch { /* backend unreachable */ }
   }, []);
 
@@ -96,6 +136,7 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
     setEvents([]);
     setStats({ mints: 0, burns: 0, collects: 0 });
     setTvl({ amount0: '0', amount1: '0' });
+    setTvlUsd({ usd0: 0, usd1: 0, total: 0 });
 
     Promise.all([fetchEvents(), fetchTvl()]).finally(() => setLoading(false));
   }, [poolAddress, fetchEvents, fetchTvl]);
@@ -137,7 +178,9 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
               data.pool_address?.toLowerCase() === poolRef.current.toLowerCase()
             ) {
               const { type: _, ...evt } = data;
-              const liqEvt = evt as LiquidityEvent;
+              const liqEvt = invertRef.current
+                ? swapEventAmounts(evt as LiquidityEvent)
+                : evt as LiquidityEvent;
 
               setEvents(prev => {
                 const next = [liqEvt, ...prev];
@@ -192,5 +235,5 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
     };
   }, [poolAddress]);
 
-  return { events, tvl, stats, loading, wsConnected };
+  return { events, tvl, tvlUsd, stats, loading, wsConnected };
 }

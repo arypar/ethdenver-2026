@@ -27,21 +27,11 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
   const filtered = actions.filter(a => filter === 'All' || a.status === filter);
   const liveCount = actions.filter(a => a.source === 'live').length;
 
-  const isSwapAction = (a: ActionItem) => {
-    const types = a.details.actionTypes ?? [];
-    return types.some(t => t === 'Recommend Swap' || t === 'Auto Swap');
-  };
-
   const handleExecute = (id: string) => {
     if (!connected) { onConnectRequired(); return; }
     const a = actions.find(x => x.id === id);
     if (!a) return;
-
-    if (isSwapAction(a)) {
-      setExecuteState({ open: true, id, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC' });
-    } else {
-      onUpdateStatus(id, 'Completed');
-    }
+    setExecuteState({ open: true, id, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC' });
   };
 
   return (
@@ -122,7 +112,7 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
         </div>
       )}
 
-      <ActionDetailDialog action={reviewAction} open={!!reviewAction} onClose={() => setReviewAction(null)} onExecute={handleExecute} onUpdateStatus={onUpdateStatus} connected={connected} onConnectRequired={onConnectRequired} />
+      <ActionDetailDialog action={reviewAction} open={!!reviewAction} onClose={() => setReviewAction(null)} onExecute={handleExecute} connected={connected} onConnectRequired={onConnectRequired} />
       <ExecuteDialog open={executeState.open} onClose={() => setExecuteState({ open: false, id: '', label: '', pool: '' })} onConfirm={() => onUpdateStatus(executeState.id, 'Completed')} label={executeState.label} pool={executeState.pool} />
     </div>
   );

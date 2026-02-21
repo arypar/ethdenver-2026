@@ -8,8 +8,8 @@ const MONAD_RPC = process.env.MONAD_RPC_URL || 'https://monad-mainnet.drpc.org';
 const CURVE_ADDRESS = '0xA7283d07812a02AFB7C09B60f8896bCEA3F90aCE' as const;
 const POLL_MS = 3_000;
 const API_POLL_MS = 15_000;
-const LOG_CHUNK_SIZE = 1000;
-const CONCURRENCY = 3;
+const LOG_CHUNK_SIZE = 5000;
+const CONCURRENCY = 5;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const SECS_PER_BLOCK = 1;
 
@@ -241,6 +241,10 @@ class MonadTokenTracker extends EventEmitter {
     return !!state && state.backfillBlocks >= blocksNeeded;
   }
 
+  isBackfilling(tokenAddress: string): boolean {
+    return this.tokens.get(tokenAddress.toLowerCase())?.backfilling ?? false;
+  }
+
   trackedTokens(): string[] {
     return Array.from(this.tokens.keys());
   }
@@ -300,14 +304,39 @@ class MonadTokenTracker extends EventEmitter {
     state.backfilling = true;
     try {
       const now = Date.now();
+      const label = state.meta?.symbol || addr.slice(0, 10);
+      const sinceTs = Math.floor((now - blocksBack * SECS_PER_BLOCK * 1000) / 1000);
+
+      // Try nad.fun API first — much faster than scanning 86K+ blocks on-chain
+      log('monad-tracker', `Backfilling ${label} — trying nad.fun API first...`);
+      const apiSwaps = await getSwapHistorySince(addr, sinceTs);
+      if (apiSwaps.length > 0) {
+        const converted = apiSwapsToRecords(addr, apiSwaps);
+        converted.sort((a, b) => a.timestamp - b.timestamp);
+        state.swaps = converted;
+        state.backfillBlocks = blocksBack;
+        const totalVol = converted.reduce((s, sw) => s + sw.volumeMON, 0);
+        log('monad-tracker', `Backfilled ${label} via API: ${converted.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+        await dbClearMonadSwaps(addr);
+        await dbInsertMonadSwaps(converted);
+        this.emit('backfill_complete', { pool: addr });
+        return;
+      }
+
+      // Fall back to on-chain log scanning
       const currentBlock = await rpc.getBlockNumber();
       const startBlock = currentBlock - BigInt(blocksBack);
+      log('monad-tracker', `${label}: API returned 0 swaps — scanning ${blocksBack} blocks on-chain...`);
 
-      log('monad-tracker', `Backfilling ${addr.slice(0, 10)} — ${blocksBack} blocks from chain...`);
+      let buyPct = 0;
+      let sellPct = 0;
+      const emitCombinedProgress = () => {
+        this.emit('backfill_progress', { pool: addr, progress: Math.round((buyPct + sellPct) / 2) });
+      };
 
       const [buyLogs, sellLogs] = await Promise.all([
-        this.fetchLogs(CURVE_BUY_EVENT, addr as `0x${string}`, startBlock, currentBlock),
-        this.fetchLogs(CURVE_SELL_EVENT, addr as `0x${string}`, startBlock, currentBlock),
+        this.fetchLogs(CURVE_BUY_EVENT, addr as `0x${string}`, startBlock, currentBlock, (pct) => { buyPct = pct; emitCombinedProgress(); }),
+        this.fetchLogs(CURVE_SELL_EVENT, addr as `0x${string}`, startBlock, currentBlock, (pct) => { sellPct = pct; emitCombinedProgress(); }),
       ]);
 
       const newSwaps: MonadSwapRecord[] = [];
@@ -356,33 +385,17 @@ class MonadTokenTracker extends EventEmitter {
 
       newSwaps.sort((a, b) => a.blockNumber - b.blockNumber);
 
-      const label = state.meta?.symbol || addr.slice(0, 10);
-
-      if (newSwaps.length === 0) {
-        log('monad-tracker', `${label}: 0 on-chain swaps — trying nad.fun API...`);
-        const sinceTs = Math.floor((now - blocksBack * SECS_PER_BLOCK * 1000) / 1000);
-        const apiSwaps = await getSwapHistorySince(addr, sinceTs);
-        if (apiSwaps.length > 0) {
-          const converted = apiSwapsToRecords(addr, apiSwaps);
-          converted.sort((a, b) => a.timestamp - b.timestamp);
-          state.swaps = converted;
-          state.backfillBlocks = blocksBack;
-          const totalVol = converted.reduce((s, sw) => s + sw.volumeMON, 0);
-          log('monad-tracker', `Backfilled ${label} via API: ${converted.length} swaps | vol ${totalVol.toFixed(2)} MON`);
-          await dbClearMonadSwaps(addr);
-          await dbInsertMonadSwaps(converted);
-          state.backfilling = false;
-          return;
-        }
-        log('monad-tracker', `Backfilled ${label}: 0 swaps (on-chain + API)`);
-      } else {
+      if (newSwaps.length > 0) {
         const totalVol = newSwaps.reduce((s, sw) => s + sw.volumeMON, 0);
         log('monad-tracker', `Backfilled ${label}: ${newSwaps.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+      } else {
+        log('monad-tracker', `Backfilled ${label}: 0 swaps (on-chain + API)`);
       }
 
       state.swaps = newSwaps;
       state.backfillBlocks = blocksBack;
       await dbInsertMonadSwaps(newSwaps);
+      this.emit('backfill_complete', { pool: addr });
     } catch (err) {
       logError('monad-tracker', `Backfill failed: ${err instanceof Error ? err.message : 'unknown'}`);
     } finally {
@@ -554,7 +567,7 @@ class MonadTokenTracker extends EventEmitter {
     }
   }
 
-  private async fetchLogs(event: any, tokenAddress: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<any[]> {
+  private async fetchLogs(event: any, tokenAddress: `0x${string}`, fromBlock: bigint, toBlock: bigint, onProgress?: (pct: number) => void): Promise<any[]> {
     const chunks: Array<{ from: bigint; to: bigint }> = [];
     let from = fromBlock;
     while (from <= toBlock) {
@@ -563,6 +576,9 @@ class MonadTokenTracker extends EventEmitter {
       from = to + BigInt(1);
     }
 
+    const totalBatches = Math.ceil(chunks.length / CONCURRENCY);
+    let batchesDone = 0;
+
     const allLogs: any[] = [];
     for (let i = 0; i < chunks.length; i += CONCURRENCY) {
       const batch = chunks.slice(i, i + CONCURRENCY);
@@ -570,6 +586,8 @@ class MonadTokenTracker extends EventEmitter {
         batch.map(({ from: f, to: t }) => this.fetchLogsChunk(event, tokenAddress, f, t)),
       );
       for (const logs of results) allLogs.push(...logs);
+      batchesDone++;
+      if (onProgress) onProgress(Math.round((batchesDone / totalBatches) * 100));
     }
     return allLogs;
   }

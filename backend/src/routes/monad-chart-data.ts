@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { monadTracker, type MonadSwapRecord } from '../lib/monad-tracker.js';
 import { resolveToken } from '../lib/nadfun-api.js';
+import { getMonUsdPrice } from '../lib/mon-price.js';
 import { log, logError } from '../lib/log.js';
 
 const router = Router();
@@ -110,8 +111,13 @@ router.post('/chart-data', async (req, res) => {
       }
     }
 
+    let backfilling = false;
     if (!monadTracker.hasBackfill(addr, config.blocksBack)) {
-      await monadTracker.backfill(addr, config.blocksBack);
+      log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — triggering background backfill`);
+      monadTracker.backfill(addr, config.blocksBack).catch(err =>
+        logError('monad-chart', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
+      );
+      backfilling = true;
     }
 
     const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
@@ -119,24 +125,30 @@ router.post('/chart-data', async (req, res) => {
     log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps`);
 
     if (swaps.length === 0) {
-      log('monad-chart', `${addr.slice(0, 10)} — no swaps, returning empty`);
-      res.json([]);
+      log('monad-chart', `${addr.slice(0, 10)} — no swaps yet (backfilling: ${backfilling})`);
+      res.json({ data: [], backfilling });
       return;
     }
 
     const buckets = bucketSwaps(swaps, config);
 
+    const monUsd = await getMonUsdPrice();
+    const rate = monUsd ?? 0;
+    if (rate === 0) {
+      log('monad-chart', `WARNING: MON/USD price unavailable — chart values will be 0 for USD metrics`);
+    }
+
     const dataPoints = buckets.map(b => {
       let value: number;
       switch (metric) {
         case 'Price':
-          value = b.closingPrice ?? 0;
+          value = (b.closingPrice ?? 0) * rate;
           break;
         case 'Volume':
-          value = b.volumeMON;
+          value = b.volumeMON * rate;
           break;
         case 'Fees':
-          value = b.volumeMON * 0.01;
+          value = b.volumeMON * 0.01 * rate;
           break;
         case 'Swap Count':
           value = b.swapCount;
@@ -147,13 +159,13 @@ router.post('/chart-data', async (req, res) => {
       return {
         time: b.label,
         value: Math.round(value * 1e6) / 1e6,
-        price: Math.round((b.closingPrice ?? 0) * 1e6) / 1e6,
+        price: Math.round((b.closingPrice ?? 0) * rate * 1e6) / 1e6,
         block: 0,
       };
     });
 
     log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — served in ${Date.now() - t0}ms`);
-    res.json(dataPoints);
+    res.json({ data: dataPoints, backfilling });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logError('monad-chart', message);

@@ -203,7 +203,7 @@ export function ChartExpandDialog({ chart, open, onClose }: ChartExpandDialogPro
                 <div className="flex items-end gap-4">
                   <span className={`text-[36px] font-bold tracking-[-0.03em] leading-none ${isPositive ? 'text-white' : 'text-white'}`}
                     style={isPositive ? { textShadow: '0 0 30px rgba(52,211,153,0.15)' } : { textShadow: '0 0 30px rgba(248,113,113,0.15)' }}>
-                    {formatValue(stats.current, config.metric)}
+                    {formatValue(stats.current, config.metric, config.chain)}
                   </span>
                   <div className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[13px] font-semibold ${
                     isPositive
@@ -223,7 +223,21 @@ export function ChartExpandDialog({ chart, open, onClose }: ChartExpandDialogPro
                   <div className="flex h-full items-center justify-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
-                      <span className="text-[13px] text-white/30">Loading on-chain data...</span>
+                      {chart.backfilling ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="text-[13px] text-white/30">
+                            Backfilling {config.range} data{chart.backfillProgress != null ? `... ${chart.backfillProgress}%` : '...'}
+                          </span>
+                          <div className="w-48 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-[#FF007A] transition-all duration-500 ease-out"
+                              style={{ width: `${chart.backfillProgress ?? 5}%` }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[13px] text-white/30">Loading on-chain data...</span>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -235,16 +249,16 @@ export function ChartExpandDialog({ chart, open, onClose }: ChartExpandDialogPro
               <div className="flex items-center gap-6 border-t border-white/[0.06] px-6 py-3 shrink-0">
                 {config.metric === 'Price' ? (
                   <>
-                    <StatChip label="Open" value={formatValue(open_, config.metric)} />
-                    <StatChip label="High" value={formatValue(high, config.metric)} accent="emerald" />
-                    <StatChip label="Low" value={formatValue(low, config.metric)} accent="red" />
-                    <StatChip label="Current" value={formatValue(stats.current, config.metric)} />
+                    <StatChip label="Open" value={formatValue(open_, config.metric, config.chain)} />
+                    <StatChip label="High" value={formatValue(high, config.metric, config.chain)} accent="emerald" />
+                    <StatChip label="Low" value={formatValue(low, config.metric, config.chain)} accent="red" />
+                    <StatChip label="Current" value={formatValue(stats.current, config.metric, config.chain)} />
                   </>
                 ) : (
                   <>
-                    <StatChip label="Current" value={formatValue(stats.current, config.metric)} />
-                    <StatChip label="Peak" value={formatValue(stats.peak, config.metric)} accent="emerald" />
-                    <StatChip label="Total" value={formatValue(totalVolume, config.metric)} />
+                    <StatChip label="Current" value={formatValue(stats.current, config.metric, config.chain)} />
+                    <StatChip label="Peak" value={formatValue(stats.peak, config.metric, config.chain)} accent="emerald" />
+                    <StatChip label="Total" value={formatValue(totalVolume, config.metric, config.chain)} />
                   </>
                 )}
                 <StatChip label="Data Points" value={chart.data.length.toString()} />
