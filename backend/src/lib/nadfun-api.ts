@@ -1,15 +1,16 @@
-import { log, logError } from './log.js';
+import { logWarn, logError } from './log.js';
 
 const BASE_URL = 'https://api.nadapp.net';
 const API_KEY = process.env.NADFUN_API_KEY || '';
 
 let rateLimitedUntil = 0;
+let rateLimitLogged = false;
 
 async function apiFetch<T>(path: string): Promise<T | null> {
   if (Date.now() < rateLimitedUntil) {
-    log('nadfun', `Rate limited — skipping ${path}`);
     return null;
   }
+  if (rateLimitLogged) rateLimitLogged = false;
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (API_KEY) headers['X-API-Key'] = API_KEY;
@@ -19,7 +20,10 @@ async function apiFetch<T>(path: string): Promise<T | null> {
 
     if (res.status === 429) {
       rateLimitedUntil = Date.now() + 60_000;
-      logError('nadfun', `Rate limited on ${path} — backing off 60s`);
+      if (!rateLimitLogged) {
+        rateLimitLogged = true;
+        logWarn('nadfun', `Rate limited — backing off 60s`);
+      }
       return null;
     }
 

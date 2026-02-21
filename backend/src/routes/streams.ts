@@ -3,7 +3,7 @@ import { supabase, DB_ENABLED } from '../lib/supabase.js';
 import { broadcastStreamTx, broadcastLiquidityEvent } from '../lib/ws-server.js';
 import { tracker } from '../lib/pool-tracker.js';
 import { monadTracker } from '../lib/monad-tracker.js';
-import { log, logError } from '../lib/log.js';
+import { log, logDebug, logError } from '../lib/log.js';
 import { getCachedPool } from '../lib/pool-cache.js';
 import { createPublicClient, http, erc20Abi, parseAbiItem, type Address } from 'viem';
 import { mainnet } from 'viem/chains';
@@ -278,7 +278,7 @@ async function backfillLiquidityEvents(poolAddress: string): Promise<any[]> {
     }
 
     backfillState.set(pool, { lastBlock: Number(currentBlock), lastFetchMs: now });
-    log('streams', `[eth] Backfilled ${rows.length} liquidity event(s) for ${pool.slice(0, 10)}... (blocks ${fromBlock}..${currentBlock})`);
+    logDebug('streams', `[eth] Backfilled ${rows.length} liquidity event(s) for ${pool.slice(0, 10)}...`);
     return rows;
   } catch (err: any) {
     logError('streams', `Backfill error for ${pool}: ${err.message}`);
@@ -475,7 +475,7 @@ router.post('/webhook/eth', async (req, res) => {
   try {
     const body = req.body as EthPayload;
     if (!body?.block || !body?.receipts) {
-      log('streams', `[eth] No block/receipts in payload — keys: [${Object.keys(body || {}).join(', ')}]`);
+      logDebug('streams', `[eth] No block/receipts in payload — keys: [${Object.keys(body || {}).join(', ')}]`);
       res.json({ ok: true, chain: 'eth', swaps: 0, liquidity: 0 });
       return;
     }

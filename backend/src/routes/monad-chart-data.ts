@@ -3,10 +3,11 @@ import { monadTracker, dbQueryMonadSwaps, type MonadSwapRecord } from '../lib/mo
 import { resolveToken } from '../lib/nadfun-api.js';
 import { getMonUsdPrice } from '../lib/mon-price.js';
 import { DB_ENABLED } from '../lib/supabase.js';
-import { log, logError } from '../lib/log.js';
+import { logDebug, logWarn, logError } from '../lib/log.js';
 
 const router = Router();
 
+let monPriceWarned = false;
 const SECS_PER_BLOCK = 1;
 
 type Metric = 'Price' | 'Volume' | 'Swap Count' | 'Fees';
@@ -113,7 +114,7 @@ router.post('/chart-data', async (req, res) => {
 
     // Trigger backfill if needed (non-blocking)
     if (!monadTracker.hasBackfill(addr, config.blocksBack) && !monadTracker.isBackfilling(addr)) {
-      log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — triggering background backfill`);
+      logDebug('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — triggering backfill`);
       monadTracker.backfill(addr, config.blocksBack).catch(err =>
         logError('monad-chart', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
       );
@@ -127,7 +128,7 @@ router.post('/chart-data', async (req, res) => {
     if (swaps.length === 0 && DB_ENABLED) {
       swaps = await dbQueryMonadSwaps(addr, sinceMs);
     }
-    log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps (backfilling: ${backfilling})`);
+    logDebug('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps`);
 
     if (swaps.length === 0) {
       res.json({ data: [], backfilling });
@@ -138,8 +139,9 @@ router.post('/chart-data', async (req, res) => {
 
     const monUsd = await getMonUsdPrice();
     const rate = monUsd ?? 0;
-    if (rate === 0) {
-      log('monad-chart', `WARNING: MON/USD price unavailable — chart values will be 0 for USD metrics`);
+    if (rate === 0 && !monPriceWarned) {
+      monPriceWarned = true;
+      logWarn('monad-chart', `MON/USD price unavailable — chart values will be 0 for USD metrics`);
     }
 
     const dataPoints = buckets.map(b => {
@@ -168,7 +170,7 @@ router.post('/chart-data', async (req, res) => {
       };
     });
 
-    log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — served in ${Date.now() - t0}ms`);
+    logDebug('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — served in ${Date.now() - t0}ms`);
     res.json({ data: dataPoints, backfilling });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

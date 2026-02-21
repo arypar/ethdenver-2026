@@ -21,7 +21,7 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'Swap Count', category: 'condition', label: 'Swap Count' },
 
   { type: 'Create Alert', category: 'action', label: 'Create Alert' },
-  { type: 'Recommend Swap', category: 'action', label: 'Recommend Swap' },
+  { type: 'Swap', category: 'action', label: 'Swap' },
   { type: 'Add Liquidity', category: 'action', label: 'Add Liquidity' },
   { type: 'Remove Liquidity', category: 'action', label: 'Remove Liquidity' },
 ];
@@ -76,7 +76,7 @@ export function getBlockError(block: CanvasBlock): string | null {
     }
     return null;
   }
-  if (block.type === 'Recommend Swap') {
+  if (block.type === 'Swap') {
     const token = String(block.config.token || '').trim();
     const amount = String(block.config.amount || '').trim();
     if (!token) return 'Select a token';
@@ -108,7 +108,7 @@ export function createDefaultConfig(category: BlockCategory, type: string): Reco
     if (type === 'Swap Count' || type === 'Volume') return { operator: '>', value: '', window: '5m' };
     return { operator: '>', value: '' };
   }
-  if (type === 'Recommend Swap') return { token: '', amount: '' };
+  if (type === 'Swap') return { token: '', amount: '' };
   if (type === 'Add Liquidity') return { amount: '', rangeLow: '', rangeHigh: '' };
   if (type === 'Remove Liquidity') return { percent: '100', amount: '' };
   return { message: '' };

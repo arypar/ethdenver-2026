@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createPublicClient, http, parseEther, formatEther, defineChain } from 'viem';
-import { log, logError } from '../lib/log.js';
+import { logDebug, logError } from '../lib/log.js';
 import { monadTracker } from '../lib/monad-tracker.js';
 
 const router = Router();
@@ -61,7 +61,7 @@ router.post('/quote', async (req, res) => {
     }
 
     const amountInWei = parseEther(amountIn.toString());
-    log('nadfun', `Quote: ${isBuy ? 'BUY' : 'SELL'} ${token.slice(0, 10)}... amountIn=${amountIn}`);
+    logDebug('nadfun', `Quote: ${isBuy ? 'BUY' : 'SELL'} ${token.slice(0, 10)}... amountIn=${amountIn}`);
 
     const [quoteResult, graduated, locked] = await Promise.all([
       rpc.readContract({
@@ -89,7 +89,7 @@ router.post('/quote', async (req, res) => {
 
     const meta = monadTracker.getTokenMeta(token);
 
-    log('nadfun', `Quote result: router=${isBondingCurve ? 'BondingCurve' : 'DEX'} amountOut=${formatEther(amountOut)} graduated=${graduated} locked=${locked}`);
+    logDebug('nadfun', `Quote result: router=${isBondingCurve ? 'BondingCurve' : 'DEX'} amountOut=${formatEther(amountOut)}`);
 
     res.json({
       router: routerAddr,

@@ -15,7 +15,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
 } from 'recharts';
 import type { ChartConfig, ChartDataPoint } from '@/lib/types';
 import { formatValue, getChartStats } from '@/lib/pool-data';
@@ -55,17 +54,11 @@ export function ChartPanel({ config, data, onSave }: ChartPanelProps) {
     tickFormatter: (v: number) => formatValue(v, config.metric),
   };
 
-  const gridProps = {
-    strokeDasharray: '3 3',
-    stroke: 'rgba(255,255,255,0.04)',
-  };
-
   const renderChart = () => {
     const margin = { top: 4, right: 4, left: 0, bottom: 0 };
     if (config.chartType === 'bar') {
       return (
         <BarChart data={data} margin={margin}>
-          <CartesianGrid {...gridProps} />
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <Tooltip content={<CustomTooltip metric={config.metric} />} />
@@ -76,7 +69,6 @@ export function ChartPanel({ config, data, onSave }: ChartPanelProps) {
     if (config.chartType === 'line') {
       return (
         <LineChart data={data} margin={margin}>
-          <CartesianGrid {...gridProps} />
           <XAxis {...xAxisProps} />
           <YAxis {...yAxisProps} />
           <Tooltip content={<CustomTooltip metric={config.metric} />} />
@@ -86,7 +78,6 @@ export function ChartPanel({ config, data, onSave }: ChartPanelProps) {
     }
     return (
       <AreaChart data={data} margin={margin}>
-        <CartesianGrid {...gridProps} />
         <XAxis {...xAxisProps} />
         <YAxis {...yAxisProps} />
         <Tooltip content={<CustomTooltip metric={config.metric} />} />
@@ -116,7 +107,17 @@ export function ChartPanel({ config, data, onSave }: ChartPanelProps) {
         </CardAction>
       </CardHeader>
       <CardContent>
-        <div className="h-[260px] w-full">
+        <div className="relative h-[260px] w-full">
+          <div
+            className="absolute inset-0 pointer-events-none rounded-lg overflow-hidden"
+            style={{
+              backgroundImage: `
+                linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+              `,
+              backgroundSize: '24px 24px',
+            }}
+          />
           <ResponsiveContainer width="100%" height="100%">
             {renderChart()}
           </ResponsiveContainer>

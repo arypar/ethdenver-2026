@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
 import type { RuleAction, ActionType } from '@/lib/types';
 
-const ACTION_TYPES: ActionType[] = ['Create Alert', 'Notify', 'Recommend Swap', 'Auto Swap'];
+const ACTION_TYPES: ActionType[] = ['Create Alert', 'Notify', 'Swap', 'Auto Swap'];
 
 interface ActionsEditorProps {
   actions: RuleAction[];
@@ -45,7 +45,7 @@ export function ActionsEditor({ actions, onChange }: ActionsEditorProps) {
           {a.type === 'Notify' && (
             <Input value={a.config.channel || ''} onChange={e => updateConfig(i, 'channel', e.target.value)} placeholder="Channel" className="h-8 w-[120px] text-sm bg-white" />
           )}
-          {(a.type === 'Recommend Swap' || a.type === 'Auto Swap') && (
+          {(a.type === 'Swap' || a.type === 'Auto Swap') && (
             <>
               <Input value={a.config.token || ''} onChange={e => updateConfig(i, 'token', e.target.value)} placeholder="Token" className="h-8 w-[80px] text-sm bg-white" />
               <Input type="number" value={a.config.percent?.toString() || ''} onChange={e => updateConfig(i, 'percent', Number(e.target.value))} placeholder="%" className="h-8 w-[64px] text-sm bg-white" />

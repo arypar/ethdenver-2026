@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { supabase, DB_ENABLED } from '../lib/supabase.js';
 import { log, logError } from '../lib/log.js';
+import { checkRuleNow } from '../lib/rule-engine.js';
 
 const router = Router();
 
@@ -26,14 +27,7 @@ router.get('/rules', async (_req, res) => {
   }));
 
   const enabled = rules.filter(r => r.enabled).length;
-  const disabled = rules.length - enabled;
-  const pools = [...new Set(rules.map(r => r.trigger.pool))];
-  log('rules', `Loaded ${rules.length} rules (${enabled} enabled, ${disabled} disabled) | pools: [${pools.join(', ')}]`);
-  for (const r of rules) {
-    const condSummary = (r.conditions as any[]).map((c: any) => `${c.field} ${c.operator} ${c.value}`).join(', ') || 'none';
-    const actSummary = (r.actions as any[]).map((a: any) => a.type).join(', ') || 'none';
-    log('rules', `  ${r.enabled ? '●' : '○'} "${r.name}" on ${r.trigger.pool} | conditions: [${condSummary}] | actions: [${actSummary}]`);
-  }
+  log('rules', `GET /rules — ${rules.length} total (${enabled} enabled)`);
   res.json(rules);
 });
 
@@ -41,25 +35,44 @@ router.post('/rules', async (req, res) => {
   if (!DB_ENABLED || !supabase) { res.status(503).json({ error: 'DB not configured' }); return; }
 
   const { id, name, enabled, trigger, conditions, conditionLogic, actions } = req.body;
-  if (!trigger?.pool) { res.status(400).json({ error: 'Missing pool' }); return; }
 
-  const { error } = await supabase.from('rules').upsert({
+  log('rules', `POST /rules — "${name}" on ${trigger?.chain || 'eth'}:${trigger?.pool} (${(conditions || []).length} cond, ${(actions || []).length} act)`);
+
+  if (!trigger?.pool) {
+    logError('rules', `  REJECTED — missing pool in trigger`);
+    res.status(400).json({ error: 'Missing pool' });
+    return;
+  }
+
+  const chain = trigger.chain || 'eth';
+  const baseRow = {
     id: id || undefined,
     name: name || 'Untitled Rule',
     enabled: enabled ?? true,
     pool: trigger.pool,
-    chain: trigger.chain || 'eth',
+    chain,
     conditions: conditions || [],
-    condition_logic: conditionLogic || 'AND',
     actions: actions || [],
-  }, { onConflict: 'id' });
+  };
 
-  if (error) { logError('rules', `Save: ${error.message}`); res.status(500).json({ error: error.message }); return; }
+  let { error } = await supabase.from('rules').upsert(
+    { ...baseRow, condition_logic: conditionLogic || 'AND' },
+    { onConflict: 'id' },
+  );
 
-  const condSummary = (conditions || []).map((c: any) => `${c.field} ${c.operator} ${c.value}`).join(', ') || 'none';
-  const actSummary = (actions || []).map((a: any) => a.type).join(', ') || 'none';
-  log('rules', `Saved rule "${name}" on ${trigger.pool} | enabled: ${enabled ?? true} | conditions: [${condSummary}] | actions: [${actSummary}]`);
+  if (error?.message?.includes('condition_logic')) {
+    log('rules', `  condition_logic column missing, retrying without it`);
+    ({ error } = await supabase.from('rules').upsert(baseRow, { onConflict: 'id' }));
+  }
+
+  if (error) { logError('rules', `  SAVE FAILED: ${error.message}`); res.status(500).json({ error: error.message }); return; }
+
+  log('rules', `  SAVED OK — rule "${name}" on ${chain}:${trigger.pool} (id=${id?.slice(0, 8) || 'new'})`);
   res.json({ ok: true });
+
+  if ((enabled ?? true) && id) {
+    checkRuleNow(id).catch(() => {});
+  }
 });
 
 router.patch('/rules/:id', async (req, res) => {
@@ -78,22 +91,38 @@ router.patch('/rules/:id', async (req, res) => {
 
   if (Object.keys(updates).length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }
 
-  const { error } = await supabase.from('rules').update(updates).eq('id', id);
-  if (error) { logError('rules', `Update ${id}: ${error.message}`); res.status(500).json({ error: error.message }); return; }
+  log('rules', `PATCH /rules/${id.slice(0, 8)} — fields: [${Object.keys(updates).join(', ')}]${updates.enabled !== undefined ? ` enabled→${updates.enabled}` : ''}`);
 
-  const fields = Object.keys(updates).join(', ');
-  log('rules', `Updated rule ${id.slice(0, 8)}... | fields: [${fields}]${updates.enabled !== undefined ? ` | enabled → ${updates.enabled}` : ''}`);
+  let { error } = await supabase.from('rules').update(updates).eq('id', id);
+
+  if (error?.message?.includes('condition_logic')) {
+    delete updates.condition_logic;
+    if (Object.keys(updates).length > 0) {
+      ({ error } = await supabase.from('rules').update(updates).eq('id', id));
+    } else {
+      error = null;
+    }
+  }
+
+  if (error) { logError('rules', `  UPDATE FAILED ${id.slice(0, 8)}: ${error.message}`); res.status(500).json({ error: error.message }); return; }
+
+  log('rules', `  UPDATED OK — ${id.slice(0, 8)}`);
   res.json({ ok: true });
+
+  if (updates.enabled !== false) {
+    checkRuleNow(id).catch(() => {});
+  }
 });
 
 router.delete('/rules/:id', async (req, res) => {
   if (!DB_ENABLED || !supabase) { res.status(503).json({ error: 'DB not configured' }); return; }
 
   const { id } = req.params;
+  log('rules', `DELETE /rules/${id.slice(0, 8)}`);
   const { error } = await supabase.from('rules').delete().eq('id', id);
-  if (error) { logError('rules', `Delete ${id}: ${error.message}`); res.status(500).json({ error: error.message }); return; }
+  if (error) { logError('rules', `  DELETE FAILED ${id.slice(0, 8)}: ${error.message}`); res.status(500).json({ error: error.message }); return; }
 
-  log('rules', `Deleted rule ${id.slice(0, 8)}...`);
+  log('rules', `  DELETED OK — ${id.slice(0, 8)}`);
   res.json({ ok: true });
 });
 

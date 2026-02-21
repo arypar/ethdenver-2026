@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabase, DB_ENABLED } from '../lib/supabase.js';
-import { log, logError } from '../lib/log.js';
+import { logDebug, logError } from '../lib/log.js';
 
 const router = Router();
 
@@ -22,7 +22,7 @@ router.get('/dismissed-suggestions', async (_req, res) => {
   }
 
   const pools = (data ?? []).map(r => r.pool_name);
-  log('dismissed', `Loaded ${pools.length} dismissed suggestions`);
+  logDebug('dismissed', `Loaded ${pools.length} dismissed suggestions`);
   res.json(pools);
 });
 
@@ -48,7 +48,7 @@ router.post('/dismissed-suggestions', async (req, res) => {
     return;
   }
 
-  log('dismissed', `Dismissed suggestion: ${pool}`);
+  logDebug('dismissed', `Dismissed suggestion: ${pool}`);
   res.json({ ok: true });
 });
 

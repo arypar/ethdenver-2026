@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { resolvePool, getCachedPool, getAllCachedPools } from '../lib/pool-cache.js';
-import { log } from '../lib/log.js';
+import { logDebug } from '../lib/log.js';
 
 const router = Router();
 
@@ -13,9 +13,9 @@ router.post('/resolve-pool', async (req, res) => {
   }
 
   try {
-    log('resolve-pool', `Resolving ${tokenA}/${tokenB}...`);
+    logDebug('resolve-pool', `Resolving ${tokenA}/${tokenB}...`);
     const meta = await resolvePool(tokenA, tokenB);
-    log('resolve-pool', `Resolved ${tokenA}/${tokenB} → ${meta.address} (fee: ${meta.feeTier})`);
+    logDebug('resolve-pool', `Resolved ${tokenA}/${tokenB} → ${meta.address} (fee: ${meta.feeTier})`);
 
     res.json({
       pool: `${tokenA.toUpperCase()}/${tokenB.toUpperCase()}`,

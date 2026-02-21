@@ -115,6 +115,9 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     setStep('quoting');
     setError('');
     try {
+      // Switch to Monad early so the wallet is ready for the swap
+      try { await switchChain(wagmiConfig, { chainId: MONAD_CHAIN_ID }); } catch {}
+
       const q = await getNadfunQuote(tokenAddress, amount, isBuy);
       setNadfunQuoteData(q);
 
@@ -147,12 +150,13 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     setStep('approving');
     try {
       await switchChain(wagmiConfig, { chainId: MONAD_CHAIN_ID });
-      const wc = await getWalletClient(wagmiConfig, { chainId: MONAD_CHAIN_ID });
+      const wc = await getWalletClient(wagmiConfig);
       const amountWei = parseEther(amount);
       const approveTx = buildApproveTx(tokenAddress as `0x${string}`, nadfunQuoteData.router, amountWei);
       const hash = await (wc as any).sendTransaction({
         to: approveTx.to,
         data: approveTx.data as `0x${string}`,
+        chainId: MONAD_CHAIN_ID,
       });
       const publicClient = getPublicClient(wagmiConfig, { chainId: MONAD_CHAIN_ID });
       if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
@@ -168,7 +172,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     setStep('swapping');
     try {
       await switchChain(wagmiConfig, { chainId: MONAD_CHAIN_ID });
-      const wc = await getWalletClient(wagmiConfig, { chainId: MONAD_CHAIN_ID });
+      const wc = await getWalletClient(wagmiConfig);
       const amountWei = parseEther(amount);
       const tx = isBuy
         ? buildBuyTx(nadfunQuoteData, tokenAddress as `0x${string}`, address, amountWei)
@@ -177,6 +181,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
         to: tx.to,
         data: tx.data as `0x${string}`,
         value: tx.value,
+        chainId: MONAD_CHAIN_ID,
       });
       setTxHash(hash);
       const publicClient = getPublicClient(wagmiConfig, { chainId: MONAD_CHAIN_ID });
@@ -294,7 +299,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     <Dialog open={open} onOpenChange={v => !v && handleClose()}>
       <DialogContent
         showCloseButton={step !== 'quoting' && step !== 'approving' && step !== 'swapping'}
-        className="sm:max-w-[460px] rounded-2xl p-0 gap-0 border-0 shadow-2xl"
+        className="sm:max-w-[460px] rounded-2xl p-0 gap-0 border-0 shadow-2xl overflow-hidden"
         style={{
           backgroundColor: '#0D0D16',
           border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -303,7 +308,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
       >
         <VisuallyHidden><DialogTitle>Swap</DialogTitle></VisuallyHidden>
         {/* Header gradient */}
-        <div className="relative px-5 pt-5 pb-4">
+        <div className="relative px-5 pt-5 pb-4 min-w-0">
           <div className={`absolute inset-0 bg-gradient-to-b ${isMonad ? 'from-purple-500/[0.06]' : 'from-[#FF007A]/[0.06]'} to-transparent pointer-events-none`} />
           <div className="relative">
             <div className="flex items-center gap-2.5 mb-1">
@@ -340,7 +345,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
         </div>
 
         {/* Body */}
-        <div className="px-5 pb-5 flex flex-col gap-3">
+        <div className="px-5 pb-5 flex flex-col gap-3 min-w-0">
           {step === 'resolving' && (
             <div className="flex flex-col items-center py-8 gap-3">
               <Loader2 className={`h-6 w-6 animate-spin ${isMonad ? 'text-purple-400' : 'text-[#FF007A]'}`} />
@@ -391,7 +396,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
                     type="number"
                     step="any"
                     min="0"
-                    className="flex-1 bg-transparent text-[28px] font-semibold text-white outline-none placeholder:text-white/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="flex-1 min-w-0 bg-transparent text-[28px] font-semibold text-white outline-none placeholder:text-white/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <div className="flex items-center gap-2 rounded-full bg-white/[0.08] border border-white/[0.1] px-3 py-1.5 shrink-0">
                     <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { tracker, dbQuerySwaps, type SwapRecord } from '../lib/pool-tracker.js';
 import { DB_ENABLED } from '../lib/supabase.js';
-import { log, logError } from '../lib/log.js';
+import { logDebug, logError } from '../lib/log.js';
 
 const router = Router();
 
@@ -121,7 +121,7 @@ router.post('/chart-data', async (req, res) => {
 
     // Trigger backfill if needed (non-blocking)
     if (!tracker.hasBackfill(pool, config.blocksBack) && !tracker.isBackfilling(pool)) {
-      log('chart-data', `${pool} ${metric} ${range} — triggering background backfill`);
+      logDebug('chart-data', `${pool} ${metric} ${range} — triggering backfill`);
       tracker.backfill(pool, config.blocksBack).catch(err =>
         logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
       );
@@ -136,7 +136,7 @@ router.post('/chart-data', async (req, res) => {
     } else {
       swaps = tracker.getSwaps(pool, sinceMs);
     }
-    log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps (backfilling: ${backfilling})`);
+    logDebug('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps`);
 
     if (swaps.length === 0) {
       res.json({ data: [], backfilling });
@@ -172,7 +172,7 @@ router.post('/chart-data', async (req, res) => {
       };
     });
 
-    log('chart-data', `${pool} ${metric} ${range} — served in ${Date.now() - t0}ms`);
+    logDebug('chart-data', `${pool} ${metric} ${range} — served in ${Date.now() - t0}ms`);
     res.json({ data: dataPoints, backfilling });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

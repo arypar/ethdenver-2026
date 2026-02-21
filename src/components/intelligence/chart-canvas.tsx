@@ -98,7 +98,6 @@ export function ChartCanvas({ config, data, onSave }: ChartCanvasProps) {
     }
     return (
       <AreaChart {...commonProps}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
         <XAxis {...axisProps.xAxis} />
         <YAxis {...axisProps.yAxis} />
         <Tooltip content={<ChartTooltipContent metric={config.metric} />} />
@@ -136,7 +135,17 @@ export function ChartCanvas({ config, data, onSave }: ChartCanvasProps) {
         </PillButton>
       </div>
 
-      <div className="h-[280px] w-full">
+      <div className="relative h-[280px] w-full">
+        <div
+          className="absolute inset-0 pointer-events-none rounded-lg overflow-hidden"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+            `,
+            backgroundSize: '24px 24px',
+          }}
+        />
         <ResponsiveContainer width="100%" height="100%">
           {renderChart()}
         </ResponsiveContainer>

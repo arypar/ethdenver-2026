@@ -112,13 +112,25 @@ export function evaluateCondition(
   }
 }
 
+const TOKEN_ALIASES: Record<string, string> = {
+  ETH: 'WETH',
+  BTC: 'WBTC',
+};
+
+function normalizePoolName(pool: string): string {
+  return pool
+    .split('/')
+    .map(t => TOKEN_ALIASES[t.toUpperCase()] ?? t.toUpperCase())
+    .join('/');
+}
+
 export function evaluateRule(
   rule: Rule,
   swap: SwapEvent,
   recentSwaps: SwapEvent[],
 ): ActionItem | null {
   if (!rule.enabled) return null;
-  if (rule.trigger.pool !== swap.pool) return null;
+  if (normalizePoolName(rule.trigger.pool) !== normalizePoolName(swap.pool)) return null;
 
   const results = rule.conditions.map(c => evaluateCondition(c, swap, recentSwaps));
   const logic = rule.conditionLogic || 'AND';
@@ -139,7 +151,7 @@ export function evaluateRule(
         return a.config.message || 'Alert triggered';
       case 'Notify':
         return `Notify ${a.config.channel || 'channel'}`;
-      case 'Recommend Swap':
+      case 'Swap':
         return `Recommend: swap ${a.config.amount || '?'} ${a.config.token || 'token'}`;
       default:
         return a.type;

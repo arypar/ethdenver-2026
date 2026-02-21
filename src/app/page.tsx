@@ -11,8 +11,23 @@ import { ActionsInbox } from '@/components/actions/ActionsInbox';
 import { useSavedCharts, useRules, useActions } from '@/lib/store';
 import { useNotificationSync } from '@/lib/notifications';
 
+const TAB_STORAGE_KEY = 'chaintology-active-tab';
+const VALID_TABS: TabId[] = ['Intelligence (ETH)', 'Intelligence (Monad)', 'Rules Builder', 'Actions'];
+
+function getPersistedTab(): TabId {
+  if (typeof window === 'undefined') return 'Intelligence (ETH)';
+  const stored = localStorage.getItem(TAB_STORAGE_KEY);
+  if (stored && VALID_TABS.includes(stored as TabId)) return stored as TabId;
+  return 'Intelligence (ETH)';
+}
+
 export default function Home() {
-  const [tab, setTab] = useState<TabId>('Intelligence (ETH)');
+  const [tab, setTab] = useState<TabId>(getPersistedTab);
+
+  const handleTabChange = useCallback((next: TabId) => {
+    setTab(next);
+    localStorage.setItem(TAB_STORAGE_KEY, next);
+  }, []);
 
   const { isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
@@ -42,7 +57,7 @@ export default function Home() {
 
       <div className="relative z-10">
         <TopBar>
-          <AppTabs active={tab} onChange={setTab} />
+          <AppTabs active={tab} onChange={handleTabChange} />
         </TopBar>
 
         <main className="mx-auto max-w-6xl px-6 py-10">

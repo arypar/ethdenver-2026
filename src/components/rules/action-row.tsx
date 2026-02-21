@@ -5,7 +5,7 @@ import { PillInput } from '@/components/pill-input';
 import { X } from 'lucide-react';
 import type { RuleAction, ActionType } from '@/lib/types';
 
-const ACTION_TYPES: ActionType[] = ['Create Alert', 'Notify', 'Recommend Swap', 'Auto Swap'];
+const ACTION_TYPES: ActionType[] = ['Create Alert', 'Notify', 'Swap', 'Auto Swap'];
 
 interface ActionRowProps {
   action: RuleAction;
@@ -36,7 +36,7 @@ export function ActionRow({ action, onChange, onRemove }: ActionRowProps) {
         />
       )}
 
-      {(action.type === 'Recommend Swap' || action.type === 'Auto Swap') && (
+      {(action.type === 'Swap' || action.type === 'Auto Swap') && (
         <>
           <PillInput
             label="Token"

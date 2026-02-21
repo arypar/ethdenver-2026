@@ -33,7 +33,7 @@ export type TriggerType = 'Swap' | 'Liquidity Added' | 'Liquidity Removed';
 export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Liquidity Change %' | 'Swap Direction' | 'Count in Window' | 'Volume' | 'Swap Count';
 export type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
 export type WindowSize = '1m' | '5m' | '15m' | '1h';
-export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap' | 'Add Liquidity' | 'Remove Liquidity';
+export type ActionType = 'Create Alert' | 'Notify' | 'Swap' | 'Auto Swap' | 'Add Liquidity' | 'Remove Liquidity';
 
 export interface RuleCondition {
   id: string;

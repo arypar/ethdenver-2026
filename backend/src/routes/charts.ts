@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabase, DB_ENABLED } from '../lib/supabase.js';
 import { tracker } from '../lib/pool-tracker.js';
 import { monadTracker } from '../lib/monad-tracker.js';
-import { log, logError } from '../lib/log.js';
+import { log, logDebug, logError } from '../lib/log.js';
 
 const router = Router();
 
@@ -44,7 +44,7 @@ router.get('/charts', async (req, res) => {
     createdAt: new Date(row.created_at).getTime(),
   }));
 
-  log('charts', `Loaded ${charts.length} charts from DB${chainFilter ? ` (chain=${chainFilter})` : ''}`);
+  logDebug('charts', `Loaded ${charts.length} charts from DB${chainFilter ? ` (chain=${chainFilter})` : ''}`);
   res.json(charts);
 });
 

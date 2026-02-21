@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { tracker, type SwapRecord } from './pool-tracker.js';
 import { monadTracker, type MonadSwapRecord } from './monad-tracker.js';
-import { log } from './log.js';
+import { log, logDebug } from './log.js';
 
 interface ClientState {
   pools: Set<string>;
@@ -17,7 +17,7 @@ export function setupWebSocket(server: Server) {
   wss.on('connection', (ws) => {
     const state: ClientState = { pools: new Set(), alive: true };
     clients.set(ws, state);
-    log('ws', `Client connected (${clients.size} total)`);
+    logDebug('ws', `Client connected (${clients.size} total)`);
 
     ws.send(JSON.stringify({
       type: 'connected',
@@ -38,7 +38,7 @@ export function setupWebSocket(server: Server) {
             }
           }
           ws.send(JSON.stringify({ type: 'subscribed', pools: Array.from(state.pools) }));
-          log('ws', `Client subscribed to [${Array.from(state.pools).join(', ')}]`);
+          logDebug('ws', `Client subscribed to [${Array.from(state.pools).join(', ')}]`);
         }
 
         if (msg.type === 'unsubscribe' && Array.isArray(msg.pools)) {
@@ -46,7 +46,7 @@ export function setupWebSocket(server: Server) {
             state.pools.delete(pool);
           }
           ws.send(JSON.stringify({ type: 'unsubscribed', pools: msg.pools }));
-          log('ws', `Client unsubscribed from [${msg.pools.join(', ')}]`);
+          logDebug('ws', `Client unsubscribed from [${msg.pools.join(', ')}]`);
         }
 
         if (msg.type === 'ping') {
@@ -63,7 +63,7 @@ export function setupWebSocket(server: Server) {
 
     ws.on('close', () => {
       clients.delete(ws);
-      log('ws', `Client disconnected (${clients.size} total)`);
+      logDebug('ws', `Client disconnected (${clients.size} total)`);
     });
   });
 
@@ -77,7 +77,7 @@ export function setupWebSocket(server: Server) {
       }
     }
     if (sent > 0) {
-      log('ws', `Broadcast swap ${swap.pool} $${swap.price.toLocaleString()} (vol $${swap.volumeUSD.toFixed(2)}) → ${sent} client(s)`);
+      logDebug('ws', `Broadcast swap ${swap.pool} $${swap.price.toLocaleString()} → ${sent} client(s)`);
     }
   });
 
@@ -101,7 +101,7 @@ export function setupWebSocket(server: Server) {
       }
     }
     if (sent > 0) {
-      log('ws', `Broadcast monad swap ${swap.token.slice(0, 10)}... price=${swap.price.toFixed(6)} vol=${swap.volumeMON.toFixed(2)} MON → ${sent} client(s)`);
+      logDebug('ws', `Broadcast monad swap ${swap.token.slice(0, 10)}... → ${sent} client(s)`);
     }
   });
 

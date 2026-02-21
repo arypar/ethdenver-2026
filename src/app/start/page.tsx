@@ -361,7 +361,7 @@ function NavHint() {
     >
       <span
         className="text-[10px] tracking-[0.2em] uppercase"
-        style={{ color: "rgba(255,255,255,0.2)" }}
+        style={{ color: "rgba(255,255,255,0.4)" }}
       >
         use arrow keys
       </span>
@@ -1653,8 +1653,8 @@ export default function StartPage() {
       <motion.button
         onClick={handleSkip}
         className="absolute top-5 right-6 z-50 text-[11px] uppercase tracking-[0.2em] transition-colors cursor-pointer flex items-center gap-1.5"
-        style={{ color: "rgba(255,255,255,0.2)" }}
-        whileHover={{ color: "rgba(255,255,255,0.5)" }}
+        style={{ color: "rgba(255,255,255,0.4)" }}
+        whileHover={{ color: "rgba(255,255,255,0.65)" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}

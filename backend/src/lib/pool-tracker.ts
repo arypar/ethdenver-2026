@@ -1,7 +1,7 @@
 import { createPublicClient, http, parseAbiItem, formatUnits } from 'viem';
 import { mainnet } from 'viem/chains';
 import { getCachedPool, resolvePool, type PoolMeta } from './pool-cache.js';
-import { log, logError } from './log.js';
+import { log, logDebug, logError } from './log.js';
 import { supabase, DB_ENABLED } from './supabase.js';
 import { EventEmitter } from 'events';
 
@@ -268,7 +268,7 @@ class PoolTracker extends EventEmitter {
 
     dbInsertSwaps([swap]).catch(() => {});
 
-    log('swap', `${swap.pool} | price $${swap.price.toLocaleString()} | vol $${swap.volumeUSD.toFixed(2)} | fee $${swap.feeUSD.toFixed(2)} | block ${swap.blockNumber} | tx ${swap.txHash.slice(0, 14)}... [stream]`);
+    logDebug('swap', `${swap.pool} | $${swap.price.toLocaleString()} | vol $${swap.volumeUSD.toFixed(2)} | block ${swap.blockNumber}`);
 
     return swap;
   }
@@ -404,23 +404,18 @@ class PoolTracker extends EventEmitter {
         }
       }
 
-      const totalSwaps = allNewSwaps.length;
-      const blockRange = `${Number(fromBlock)}..${Number(currentBlock)}`;
-      log('tracker', `poll ${blockRange} — ${totalSwaps} swaps [${summary.join(', ')}]`);
-
       if (allNewSwaps.length > 0) {
         let totalVol = 0;
         let totalFees = 0;
+        const poolPrices = new Map<string, number>();
         for (const s of allNewSwaps) {
           totalVol += s.volumeUSD;
           totalFees += s.feeUSD;
-          log('swap', `${s.pool} | price $${s.price.toLocaleString()} | vol $${s.volumeUSD.toFixed(2)} | fee $${s.feeUSD.toFixed(2)} | block ${s.blockNumber} | tx ${s.txHash.slice(0, 14)}...`);
+          poolPrices.set(s.pool, s.price);
         }
 
-        const poolPrices = new Map<string, number>();
-        for (const s of allNewSwaps) poolPrices.set(s.pool, s.price);
         const priceSnap = Array.from(poolPrices.entries()).map(([p, px]) => `${p}=$${px.toLocaleString()}`).join(', ');
-        log('tracker', `poll totals — vol $${totalVol.toFixed(2)} | fees $${totalFees.toFixed(2)} | prices [${priceSnap}]`);
+        log('tracker', `poll ${Number(fromBlock)}..${Number(currentBlock)} — ${allNewSwaps.length} swap(s) | vol $${totalVol.toFixed(2)} | [${priceSnap}]`);
 
         dbInsertSwaps(allNewSwaps).catch(() => {});
       }

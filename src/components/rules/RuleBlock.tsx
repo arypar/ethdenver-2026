@@ -46,6 +46,10 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
     onUpdate(block.id, { ...block.config, [key]: value });
   };
 
+  const updateFields = (fields: Record<string, string | number>) => {
+    onUpdate(block.id, { ...block.config, ...fields });
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -70,7 +74,7 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
             <span className={cn('text-[9px] font-bold uppercase tracking-[0.08em]', meta.color)}>{meta.tagLabel}</span>
             <span className="text-[12px] font-semibold text-white/80 truncate">{block.type}</span>
           </div>
-          <BlockConfig block={block} updateField={updateField} poolTokens={poolTokens} />
+          <BlockConfig block={block} updateField={updateField} updateFields={updateFields} poolTokens={poolTokens} />
         </div>
 
         <button onClick={() => onRemove(block.id)}
@@ -124,12 +128,12 @@ function MonadTokenInput({ value, onChange, onResolve }: { value: string; onChan
   );
 }
 
-function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void; poolTokens?: string[] }) {
+function BlockConfig({ block, updateField, updateFields, poolTokens }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void; updateFields: (fields: Record<string, string | number>) => void; poolTokens?: string[] }) {
   if (block.category === 'trigger') {
     const chain = String(block.config.chain || 'eth');
     return (
       <div className="flex flex-col gap-1.5">
-        <Select value={chain} onValueChange={v => { updateField('chain', v); updateField('pool', ''); updateField('tokenSymbol', ''); }}>
+        <Select value={chain} onValueChange={v => updateFields({ chain: v, pool: '', tokenSymbol: '' })}>
           <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
           <SelectContent position="popper">
             <SelectItem value="eth">Ethereum</SelectItem>
@@ -240,7 +244,7 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
     );
   }
 
-  if (block.type === 'Recommend Swap') {
+  if (block.type === 'Swap') {
     const tokens = poolTokens && poolTokens.length > 0 ? poolTokens : ['Token A', 'Token B'];
     const selectedToken = String(block.config.token || '');
     return (

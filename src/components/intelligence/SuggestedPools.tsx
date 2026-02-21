@@ -52,7 +52,7 @@ export function SuggestedPools({
     <div className="mt-3.5 pt-3.5 border-t border-white/[0.06]">
       <div className="flex items-center gap-2 mb-2.5">
         <Sparkles className="h-3 w-3 text-[#FF007A]/70" />
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/35">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-white/55">
           Suggested for you
         </span>
         <button
@@ -77,17 +77,14 @@ export function SuggestedPools({
         )}
 
         {visible.map(s => {
-          const alreadyMonitored = existingPools.has(s.pool);
           return (
             <div
               key={`${s.chain}-${s.pool}`}
               className={cn(
-                'group relative flex items-center gap-1.5 rounded-full border px-3 py-1 transition-all duration-200',
-                alreadyMonitored
-                  ? 'border-white/[0.04] bg-white/[0.02] opacity-50'
-                  : 'border-white/[0.08] bg-white/[0.04] hover:border-[#FF007A]/30 hover:bg-[#FF007A]/[0.06] hover:shadow-[0_0_20px_rgba(255,0,122,0.08)] cursor-pointer',
+                'group relative flex items-center gap-1.5 rounded-full border px-3 py-1 transition-all duration-200 cursor-pointer',
+                'border-white/[0.08] bg-white/[0.04] hover:border-[#FF007A]/30 hover:bg-[#FF007A]/[0.06] hover:shadow-[0_0_20px_rgba(255,0,122,0.08)]',
               )}
-              onClick={() => !alreadyMonitored && onSelect(s)}
+              onClick={() => onSelect(s)}
             >
               {s.reason === 'lp' ? (
                 <Droplets className="h-3 w-3 text-emerald-400 shrink-0" />
@@ -116,9 +113,7 @@ export function SuggestedPools({
                 </span>
               )}
 
-              {!alreadyMonitored && (
-                <Plus className="h-3 w-3 text-white/30 group-hover:text-[#FF007A] transition-colors shrink-0" />
-              )}
+              <Plus className="h-3 w-3 text-white/30 group-hover:text-[#FF007A] transition-colors shrink-0" />
 
               <button
                 onClick={e => { e.stopPropagation(); dismiss(s.pool); }}

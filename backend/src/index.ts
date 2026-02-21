@@ -37,8 +37,9 @@ app.use((req, res, next) => {
   const { method, url } = req;
 
   res.on('finish', () => {
-    const ms = Date.now() - start;
     const status = res.statusCode;
+    if (status === 304) return;
+    const ms = Date.now() - start;
     const color = status >= 400 ? '\x1b[31m' : '\x1b[32m';
     console.log(`\x1b[90m${ts()}\x1b[0m ${color}${method} ${url} ${status}\x1b[0m ${ms}ms`);
   });
