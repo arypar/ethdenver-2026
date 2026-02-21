@@ -15,14 +15,15 @@ interface ActionsInboxProps {
   actions: ActionItem[];
   connected: boolean;
   onUpdateStatus: (id: string, status: ActionStatus) => void;
+  onRemoveRule: (ruleId: string) => void;
   onClearAll: () => void;
   onConnectRequired: () => void;
 }
 
-export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, onConnectRequired }: ActionsInboxProps) {
+export function ActionsInbox({ actions, connected, onUpdateStatus, onRemoveRule, onClearAll, onConnectRequired }: ActionsInboxProps) {
   const [filter, setFilter] = useState<Filter>('All');
   const [reviewAction, setReviewAction] = useState<ActionItem | null>(null);
-  const [executeState, setExecuteState] = useState<{ open: boolean; id: string; label: string; pool: string; chain?: ChainId }>({ open: false, id: '', label: '', pool: '' });
+  const [executeState, setExecuteState] = useState<{ open: boolean; id: string; ruleId: string; label: string; pool: string; chain?: ChainId }>({ open: false, id: '', ruleId: '', label: '', pool: '' });
 
   const filtered = actions.filter(a => filter === 'All' || a.status === filter);
   const liveCount = actions.filter(a => a.source === 'live').length;
@@ -31,7 +32,17 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
     if (!connected) { onConnectRequired(); return; }
     const a = actions.find(x => x.id === id);
     if (!a) return;
-    setExecuteState({ open: true, id, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC', chain: a.details.chain });
+    setExecuteState({ open: true, id, ruleId: a.ruleId, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC', chain: a.details.chain });
+  };
+
+  const handleSwapConfirmed = () => {
+    onUpdateStatus(executeState.id, 'Completed');
+    if (executeState.ruleId) {
+      actions
+        .filter(a => a.ruleId === executeState.ruleId && a.id !== executeState.id && a.status === 'Pending')
+        .forEach(a => onUpdateStatus(a.id, 'Dismissed'));
+      onRemoveRule(executeState.ruleId);
+    }
   };
 
   return (
@@ -113,7 +124,7 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
       )}
 
       <ActionDetailDialog action={reviewAction} open={!!reviewAction} onClose={() => setReviewAction(null)} onExecute={handleExecute} connected={connected} onConnectRequired={onConnectRequired} />
-      <ExecuteDialog open={executeState.open} onClose={() => setExecuteState({ open: false, id: '', label: '', pool: '' })} onConfirm={() => onUpdateStatus(executeState.id, 'Completed')} label={executeState.label} pool={executeState.pool} chain={executeState.chain} />
+      <ExecuteDialog open={executeState.open} onClose={() => setExecuteState({ open: false, id: '', ruleId: '', label: '', pool: '' })} onConfirm={handleSwapConfirmed} label={executeState.label} pool={executeState.pool} chain={executeState.chain} />
     </div>
   );
 }

@@ -100,6 +100,7 @@ export default function Home() {
               actions={actions}
               connected={isConnected}
               onUpdateStatus={updateStatus}
+              onRemoveRule={removeRule}
               onClearAll={clearActions}
               onConnectRequired={requireConnect}
             />
