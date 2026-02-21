@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { ChartForm } from './ChartForm';
 import { ChartList } from './ChartList';
 import { ChartExpandDialog } from './ChartExpandDialog';
@@ -33,6 +33,7 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
   const [expandedChart, setExpandedChart] = useState<SavedChart | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const resolvedTokenRef = useRef<{ name: string; symbol: string } | null>(null);
 
   const isMonad = chain === 'monad';
 
@@ -86,7 +87,10 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
     setError(null);
     try {
       const data = await fetchChartData(config.metric, config.pool, config.range, chain);
-      const label = isMonad ? `${config.pool.slice(0, 8)}...` : config.pool;
+      const resolved = resolvedTokenRef.current;
+      const label = isMonad
+        ? (resolved ? `$${resolved.symbol}` : `${config.pool.slice(0, 8)}...`)
+        : config.pool;
       if (data.length === 0) {
         setError(`No swap activity for ${label} in the last ${config.range}. Try a wider time range or a more active token.`);
         return;
@@ -172,7 +176,8 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
             <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">New Chart</span>
           </div>
           <div className="px-5 py-4">
-            <ChartForm config={config} onChange={setConfig} onGenerate={handleGenerate} loading={loading} chain={chain} />
+            <ChartForm config={config} onChange={setConfig} onGenerate={handleGenerate} loading={loading} chain={chain}
+              onTokenResolved={info => { resolvedTokenRef.current = info; }} />
             {error && (
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
                 <p className="text-[12px] text-amber-400/80">{error}</p>

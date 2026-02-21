@@ -125,7 +125,7 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
               </div>
               <div className="h-4 w-px bg-white/[0.06]" />
               <span className="rounded-full bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 text-[10px] font-medium text-white/40">
-                Sepolia
+                Ethereum
               </span>
               <div className="h-4 w-px bg-white/[0.06]" />
               {wsConnected && (
@@ -138,7 +138,7 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
                 </span>
               )}
               <a
-                href={`https://sepolia.etherscan.io/address/${poolAddress}`}
+                href={`https://etherscan.io/address/${poolAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-[10px] font-mono text-white/20 hover:text-white/40 transition-colors"
@@ -232,9 +232,9 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
               {/* Pool details */}
               <div className="px-5 pb-5 mt-auto">
                 <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 space-y-2.5">
-                  <DetailRow label="Network" value="Sepolia Testnet" />
+                  <DetailRow label="Network" value="Ethereum Mainnet" />
                   <DetailRow label="Protocol" value="Uniswap V3" />
-                  <DetailRow label="Pool" value={truncAddr(poolAddress)} mono link={`https://sepolia.etherscan.io/address/${poolAddress}`} />
+                  <DetailRow label="Pool" value={truncAddr(poolAddress)} mono link={`https://etherscan.io/address/${poolAddress}`} />
                   <DetailRow label="Events Indexed" value={totalEvents.toString()} />
                   <DetailRow label="Status" value={wsConnected ? 'Polling' : 'Disconnected'} accent={wsConnected ? 'emerald' : 'red'} />
                 </div>
@@ -285,7 +285,7 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
                       <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A] mx-auto mb-3" />
-                      <p className="text-[12px] text-white/30">Scanning Sepolia for liquidity events...</p>
+                      <p className="text-[12px] text-white/30">Scanning for liquidity events...</p>
                       <p className="text-[10px] text-white/15 mt-1">This may take a moment</p>
                     </div>
                   </div>
@@ -361,7 +361,7 @@ function EventTimelineRow({ event, sym0, dec0, sym1, dec1, isFirst }: {
 
       {/* Transaction */}
       <a
-        href={`https://sepolia.etherscan.io/tx/${event.tx_hash}`}
+        href={`https://etherscan.io/tx/${event.tx_hash}`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-1 text-[11px] font-mono text-white/25 hover:text-[#FF007A] transition-colors"

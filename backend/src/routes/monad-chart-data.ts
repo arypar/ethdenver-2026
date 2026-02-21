@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { monadTracker, type MonadSwapRecord } from '../lib/monad-tracker.js';
+import { resolveToken } from '../lib/nadfun-api.js';
 import { log, logError } from '../lib/log.js';
 
 const router = Router();
@@ -156,6 +157,34 @@ router.post('/chart-data', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     logError('monad-chart', message);
+    res.status(500).json({ error: message });
+  }
+});
+
+router.get('/token-info/:address', async (req, res) => {
+  const { address } = req.params;
+  if (!address?.match(/^0x[a-fA-F0-9]{40}$/)) {
+    res.status(400).json({ error: 'Invalid address' });
+    return;
+  }
+
+  try {
+    const cached = monadTracker.getTokenMeta(address);
+    if (cached) {
+      res.json({ name: cached.name, symbol: cached.symbol, image: cached.image_url, graduated: cached.graduated });
+      return;
+    }
+
+    const meta = await resolveToken(address);
+    if (!meta) {
+      res.status(404).json({ error: 'Token not found' });
+      return;
+    }
+
+    res.json({ name: meta.name, symbol: meta.symbol, image: meta.image_url, graduated: meta.graduated });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    logError('monad-token', message);
     res.status(500).json({ error: message });
   }
 });

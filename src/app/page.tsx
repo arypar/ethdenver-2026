@@ -76,6 +76,7 @@ export default function Home() {
               onUpdateRule={updateRule}
               onRemoveRule={removeRule}
               onDuplicateRule={duplicateRule}
+              onSimulateTrigger={() => {}}
               onConnectRequired={requireConnect}
             />
           )}

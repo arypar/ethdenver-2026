@@ -249,7 +249,7 @@ function LiqEventRow({ event, sym0, dec0, sym1, dec1 }: {
       </div>
 
       <a
-        href={`https://sepolia.etherscan.io/tx/${event.tx_hash}`}
+        href={`https://etherscan.io/tx/${event.tx_hash}`}
         target="_blank"
         rel="noopener noreferrer"
         className="flex items-center gap-0.5 text-white/20 hover:text-[#FF007A] font-mono shrink-0 transition-colors"
@@ -301,7 +301,7 @@ function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolNam
       <div className="flex items-center justify-between px-4 py-1.5 border-b border-white/[0.04] bg-white/[0.01]">
         <div className="flex items-center gap-2">
           <a
-            href={`https://sepolia.etherscan.io/address/${poolAddress}`}
+            href={`https://etherscan.io/address/${poolAddress}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-[10px] text-white/20 hover:text-white/50 font-mono transition-colors"
@@ -309,7 +309,7 @@ function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolNam
             Pool: {truncateAddr(poolAddress, 5)}
             <ExternalLink className="h-2 w-2 opacity-40" />
           </a>
-          <span className="text-[10px] text-white/15">Sepolia</span>
+          <span className="text-[10px] text-white/15">Ethereum</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-white/20 tabular-nums">{totalEvents} event{totalEvents !== 1 ? 's' : ''}</span>
@@ -330,7 +330,7 @@ function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolNam
         {loading ? (
           <div className="py-10 text-center">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-400 mx-auto mb-2" />
-            <p className="text-[11px] text-white/30">Scanning Sepolia for liquidity events...</p>
+            <p className="text-[11px] text-white/30">Scanning for liquidity events...</p>
           </div>
         ) : events.length === 0 ? (
           <div className="py-10 text-center">
@@ -392,7 +392,7 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-[14px] font-semibold tracking-[-0.01em] text-white">{chart.title}</h3>
-                <span className="text-[11px] text-white/30">{config.pool} · {config.range}</span>
+                <span className="text-[11px] text-white/30">{config.chain === 'monad' && config.pool.startsWith('0x') ? `${config.pool.slice(0, 6)}...${config.pool.slice(-4)}` : config.pool} · {config.range}</span>
                 <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-400">
                   <span className="relative flex h-1.5 w-1.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />

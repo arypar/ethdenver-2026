@@ -1,6 +1,6 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { http } from 'wagmi';
-import { sepolia } from 'wagmi/chains';
+import { mainnet } from 'wagmi/chains';
 import { defineChain } from 'viem';
 
 export const monad = defineChain({
@@ -18,9 +18,9 @@ export const monad = defineChain({
 export const config = getDefaultConfig({
   appName: 'Chaintology',
   projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID || 'demo',
-  chains: [sepolia, monad],
+  chains: [mainnet, monad],
   transports: {
-    [sepolia.id]: http('https://ethereum-sepolia-rpc.publicnode.com'),
+    [mainnet.id]: http('https://ethereum-rpc.publicnode.com'),
     [monad.id]: http('https://rpc.monad.xyz'),
   },
   ssr: true,

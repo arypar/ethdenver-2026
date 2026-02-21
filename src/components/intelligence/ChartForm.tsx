@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { PoolInput } from '@/components/ui/pool-input';
@@ -13,20 +14,61 @@ const MONAD_METRICS: Metric[] = ['Price', 'Volume', 'Swap Count'];
 const RANGES: TimeRange[] = ['1H', '24H', '7D', '30D'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar'];
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+interface TokenInfo {
+  name: string;
+  symbol: string;
+  image?: string;
+}
+
+function useTokenResolve(address: string, enabled: boolean) {
+  const [info, setInfo] = useState<TokenInfo | null>(null);
+  const [resolving, setResolving] = useState(false);
+  const lastAddr = useRef('');
+
+  useEffect(() => {
+    if (!enabled || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
+      setInfo(null);
+      lastAddr.current = '';
+      return;
+    }
+    if (address.toLowerCase() === lastAddr.current) return;
+    lastAddr.current = address.toLowerCase();
+    setResolving(true);
+    const controller = new AbortController();
+    fetch(`${API_BASE}/monad/token-info/${address}`, { signal: controller.signal })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setInfo({ name: data.name, symbol: data.symbol, image: data.image }); })
+      .catch(() => {})
+      .finally(() => setResolving(false));
+    return () => controller.abort();
+  }, [address, enabled]);
+
+  return { info, resolving };
+}
+
 interface ChartFormProps {
   config: ChartConfig;
   onChange: (config: ChartConfig) => void;
   onGenerate: () => void;
   loading?: boolean;
   chain?: ChainId;
+  onTokenResolved?: (info: TokenInfo | null) => void;
 }
 
-export function ChartForm({ config, onChange, onGenerate, loading, chain = 'eth' }: ChartFormProps) {
+export function ChartForm({ config, onChange, onGenerate, loading, chain = 'eth', onTokenResolved }: ChartFormProps) {
   const isMonad = chain === 'monad';
   const metrics = isMonad ? MONAD_METRICS : ETH_METRICS;
   const isDisabled = isMonad
     ? loading || !config.pool.match(/^0x[a-fA-F0-9]{40}$/)
     : loading || !config.pool.includes('/');
+
+  const { info: tokenInfo, resolving } = useTokenResolve(config.pool, isMonad);
+
+  useEffect(() => {
+    onTokenResolved?.(tokenInfo);
+  }, [tokenInfo, onTokenResolved]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -40,13 +82,23 @@ export function ChartForm({ config, onChange, onGenerate, loading, chain = 'eth'
 
         {isMonad ? (
           <Field label="Token Address">
-            <input
-              type="text"
-              value={config.pool}
-              onChange={e => onChange({ ...config, pool: e.target.value.trim() })}
-              placeholder="0x..."
-              className="h-9 w-[320px] rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 text-[13px] text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/[0.15]"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={config.pool}
+                onChange={e => onChange({ ...config, pool: e.target.value.trim() })}
+                placeholder="0x..."
+                className="h-9 w-[320px] rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 text-[13px] text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/[0.15]"
+              />
+              {resolving && <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />}
+              {tokenInfo && !resolving && (
+                <span className="flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-[11px] font-medium text-emerald-300/90">
+                  {tokenInfo.image && <img src={tokenInfo.image} alt="" className="h-3.5 w-3.5 rounded-full" />}
+                  ${tokenInfo.symbol}
+                  <span className="text-emerald-300/50">({tokenInfo.name})</span>
+                </span>
+              )}
+            </div>
           </Field>
         ) : (
           <Field label="Pool">
