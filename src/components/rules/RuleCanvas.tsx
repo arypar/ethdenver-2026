@@ -34,7 +34,7 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
     <div
       ref={setNodeRef}
       className={cn(
-        'relative min-h-[480px] rounded-2xl border border-white/[0.06] overflow-hidden transition-all duration-200',
+        'relative min-h-[520px] rounded-2xl border border-white/[0.06] overflow-hidden transition-all duration-200',
         isOver ? 'ring-2 ring-primary/20 border-primary/20' : ''
       )}
       style={{
@@ -47,7 +47,7 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
       }}
     >
       <div className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.04) 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }} />
+        style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.025) 0.5px, transparent 0.5px)', backgroundSize: '20px 20px' }} />
 
       <div className="relative z-10 p-5 flex flex-col gap-4">
         <Input value={name} onChange={e => onNameChange(e.target.value)} placeholder="Rule name..."

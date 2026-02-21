@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n frontend,backend -c cyan,magenta \"next dev\" \"npm run dev --prefix backend\"",
+    "dev": "concurrently -n frontend,backend,ngrok -c cyan,magenta,yellow \"next dev\" \"npm run dev --prefix backend\" \"ngrok http 4000 --log stdout --log-format logfmt\"",
     "dev:frontend": "next dev",
     "dev:backend": "npm run dev --prefix backend",
     "build": "next build",

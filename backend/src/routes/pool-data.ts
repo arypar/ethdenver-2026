@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { log } from '../lib/log.js';
+import { log, logError } from '../lib/log.js';
 
 const router = Router();
 const TRADING_API = 'https://trade-api.gateway.uniswap.org/v1';
@@ -47,7 +47,9 @@ router.post('/pool-data', async (req, res) => {
 
     if (!upstream.ok) {
       const err = await upstream.json();
-      res.status(upstream.status).json({ error: err.detail || err.errorCode || 'Quote failed' });
+      const errMsg = err.detail || err.errorCode || 'Quote failed';
+      logError('pool-data', `Upstream quote failed (${upstream.status}): ${errMsg}`);
+      res.status(upstream.status).json({ error: errMsg });
       return;
     }
 
@@ -59,13 +61,17 @@ router.post('/pool-data', async (req, res) => {
     const priceFrac = Number(outputRaw % outputDivisor) / Number(outputDivisor);
     const price = priceWhole + priceFrac;
 
+    const gasFee = data.quote.gasFeeUSD || '0';
+    log('pool-data', `${tokenA?.slice(0, 10)}.../${tokenB?.slice(0, 10)}... → price $${price.toFixed(6)} | gas $${gasFee} | route: ${data.routing || 'unknown'}`);
+
     res.json({
       price,
-      gasFeeUSD: data.quote.gasFeeUSD || '0',
+      gasFeeUSD: gasFee,
       routing: data.routing,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    logError('pool-data', `Error fetching pool data: ${message}`);
     res.status(500).json({ error: message });
   }
 });

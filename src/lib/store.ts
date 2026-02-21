@@ -2,27 +2,9 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Rule, SavedChart, ActionItem, ActionStatus } from './types';
-import { generateTriggerData } from './mock-data';
 import { fetchChartData } from './pool-data';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function saveToStorage<T>(key: string, value: T) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* quota exceeded */ }
-}
 
 async function apiGet<T>(path: string): Promise<T | null> {
   try {
@@ -171,31 +153,24 @@ export function useRules() {
   const [rules, setRules] = useState<Rule[]>([]);
 
   useEffect(() => {
-    setRules(loadFromStorage('unisignal-rules', []));
+    apiGet<Rule[]>('/api/rules').then(data => {
+      if (data) setRules(data);
+    });
   }, []);
 
   const addRule = useCallback((rule: Rule) => {
-    setRules(prev => {
-      const next = [rule, ...prev];
-      saveToStorage('unisignal-rules', next);
-      return next;
-    });
+    setRules(prev => [rule, ...prev]);
+    apiPost('/api/rules', rule);
   }, []);
 
   const updateRule = useCallback((id: string, updates: Partial<Rule>) => {
-    setRules(prev => {
-      const next = prev.map(r => r.id === id ? { ...r, ...updates } : r);
-      saveToStorage('unisignal-rules', next);
-      return next;
-    });
+    setRules(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    apiPatch(`/api/rules/${id}`, updates);
   }, []);
 
   const removeRule = useCallback((id: string) => {
-    setRules(prev => {
-      const next = prev.filter(r => r.id !== id);
-      saveToStorage('unisignal-rules', next);
-      return next;
-    });
+    setRules(prev => prev.filter(r => r.id !== id));
+    apiDelete(`/api/rules/${id}`);
   }, []);
 
   const duplicateRule = useCallback((id: string) => {
@@ -208,64 +183,41 @@ export function useRules() {
         name: `${source.name} (copy)`,
         createdAt: Date.now(),
       };
-      const next = [dup, ...prev];
-      saveToStorage('unisignal-rules', next);
-      return next;
+      apiPost('/api/rules', dup);
+      return [dup, ...prev];
     });
   }, []);
 
   return { rules, addRule, updateRule, removeRule, duplicateRule };
 }
 
+const ACTIONS_POLL_MS = 5_000;
+
 export function useActions() {
   const [actions, setActions] = useState<ActionItem[]>([]);
 
   useEffect(() => {
-    setActions(loadFromStorage('unisignal-actions', []));
-  }, []);
+    let cancelled = false;
 
-  const addAction = useCallback((action: ActionItem) => {
-    setActions(prev => {
-      const next = [action, ...prev];
-      saveToStorage('unisignal-actions', next);
-      return next;
-    });
+    const poll = async () => {
+      const data = await apiGet<ActionItem[]>('/api/actions');
+      if (!cancelled && data) setActions(data);
+    };
+
+    poll();
+    const interval = setInterval(poll, ACTIONS_POLL_MS);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const updateStatus = useCallback((id: string, status: ActionStatus) => {
-    setActions(prev => {
-      const next = prev.map(a => a.id === id ? { ...a, status } : a);
-      saveToStorage('unisignal-actions', next);
-      return next;
-    });
+    setActions(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    apiPatch(`/api/actions/${id}`, { status });
   }, []);
-
-  const simulateTrigger = useCallback((rule: Rule) => {
-    const triggerData = generateTriggerData(rule.name, rule.trigger.pool);
-    const action: ActionItem = {
-      id: crypto.randomUUID(),
-      ruleId: rule.id,
-      ruleName: rule.name,
-      status: 'Pending',
-      triggerReason: triggerData.triggerReason,
-      suggestedAction: triggerData.suggestedAction,
-      timestamp: Date.now(),
-      source: 'simulated',
-      details: {
-        eventType: rule.trigger.type,
-        pool: rule.trigger.pool,
-        conditionsMet: triggerData.conditionsMet,
-        proposedActions: triggerData.proposedActions,
-      },
-    };
-    addAction(action);
-    return action;
-  }, [addAction]);
 
   const clearAll = useCallback(() => {
     setActions([]);
-    saveToStorage('unisignal-actions', []);
+    apiDelete('/api/actions');
   }, []);
 
-  return { actions, addAction, updateStatus, simulateTrigger, clearAll };
+  return { actions, updateStatus, clearAll };
 }

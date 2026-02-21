@@ -118,22 +118,22 @@ export function RulesTab({
   const hasTriggersAndActions = blocks.some(b => b.category === 'trigger') && blocks.some(b => b.category === 'action');
 
   return (
-    <div>
-      <div className="mb-8">
+    <div className="flex flex-col gap-8">
+      <div>
         <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">Rules Builder</h1>
         <p className="mt-1 text-[13px] text-white/40">Set price alerts and swap recommendations for any pool.</p>
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[180px_1fr_320px]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[200px_1fr]">
           <div className="lg:sticky lg:top-[80px] lg:self-start">
             <BlockPalette onClickAdd={addBlock} />
           </div>
           <RuleCanvas name={name} onNameChange={setName} blocks={blocks} onUpdateBlock={updateBlock} onRemoveBlock={removeBlock} onActivate={handleActivate} canActivate={hasTriggersAndActions} />
-          <div className="lg:sticky lg:top-[80px] lg:self-start">
-            <ActiveRulesList rules={rules} onToggle={(id, enabled) => onUpdateRule(id, { enabled })} onEdit={handleEdit} onDuplicate={onDuplicateRule} onDelete={onRemoveRule} onSimulate={onSimulateTrigger} />
-          </div>
         </div>
+
+        <ActiveRulesList rules={rules} onToggle={(id, enabled) => onUpdateRule(id, { enabled })} onEdit={handleEdit} onDuplicate={onDuplicateRule} onDelete={onRemoveRule} onSimulate={onSimulateTrigger} />
+
         <DragOverlay dropAnimation={null}>
           {activeDrag && <DragOverlayBlock category={activeDrag.category} type={activeDrag.type} />}
         </DragOverlay>

@@ -9,15 +9,19 @@ import poolDataRouter from './routes/pool-data.js';
 import chartDataRouter from './routes/chart-data.js';
 import resolvePoolRouter from './routes/resolve-pool.js';
 import chartsRouter from './routes/charts.js';
+import rulesRouter from './routes/rules.js';
+import actionsRouter from './routes/actions.js';
 import testRouter from './routes/test.js';
+import quicknodeRouter from './routes/quicknode.js';
 import { tracker } from './lib/pool-tracker.js';
 import { setupWebSocket } from './lib/ws-server.js';
+import { startRuleEngine } from './lib/rule-engine.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors({ origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 function ts() {
   return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -44,7 +48,10 @@ app.use('/uniswap', poolDataRouter);
 app.use('/uniswap', chartDataRouter);
 app.use('/uniswap', resolvePoolRouter);
 app.use('/api', chartsRouter);
+app.use('/api', rulesRouter);
+app.use('/api', actionsRouter);
 app.use('/', testRouter);
+app.use('/quicknode', quicknodeRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now(), trackedPools: tracker.trackedPools() });
@@ -57,4 +64,5 @@ server.listen(PORT, () => {
   console.log(`\x1b[36mBackend running on http://localhost:${PORT}\x1b[0m`);
   console.log(`\x1b[36mWebSocket available at ws://localhost:${PORT}/ws\x1b[0m`);
   tracker.start();
+  startRuleEngine();
 });

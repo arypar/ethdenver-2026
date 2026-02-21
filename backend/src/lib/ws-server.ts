@@ -64,10 +64,15 @@ export function setupWebSocket(server: Server) {
 
   tracker.on('swap', (swap: SwapRecord) => {
     const msg = JSON.stringify({ type: 'swap', ...swap });
+    let sent = 0;
     for (const [ws, state] of clients) {
       if (state.pools.has(swap.pool) && ws.readyState === WebSocket.OPEN) {
         ws.send(msg);
+        sent++;
       }
+    }
+    if (sent > 0) {
+      log('ws', `Broadcast swap ${swap.pool} $${swap.price.toLocaleString()} (vol $${swap.volumeUSD.toFixed(2)}) → ${sent} client(s)`);
     }
   });
 
@@ -86,4 +91,13 @@ export function setupWebSocket(server: Server) {
   wss.on('close', () => clearInterval(heartbeat));
 
   log('ws', 'WebSocket server ready on /ws');
+}
+
+export function broadcastMonadTx(tx: Record<string, unknown>) {
+  const msg = JSON.stringify({ type: 'monad_tx', ...tx });
+  for (const [ws] of clients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
 }

@@ -257,7 +257,9 @@ class PoolTracker extends EventEmitter {
       if (DB_ENABLED) {
         const dbSwaps = await dbQuerySwaps(poolName, sinceMs);
         if (dbSwaps.length > 0) {
-          log('tracker', `${poolName} — loaded ${dbSwaps.length} swaps from DB`);
+          const prices = dbSwaps.map(s => s.price);
+          const vols = dbSwaps.reduce((sum, s) => sum + s.volumeUSD, 0);
+          log('tracker', `${poolName} — loaded ${dbSwaps.length} swaps from DB | vol $${vols.toFixed(2)} | price range $${Math.min(...prices).toFixed(2)}–$${Math.max(...prices).toFixed(2)}`);
           state.swaps = dbSwaps;
           state.backfillBlocks = blocksBack;
           state.backfilling = false;
@@ -265,7 +267,8 @@ class PoolTracker extends EventEmitter {
         }
       }
 
-      log('tracker', `Backfilling ${poolName} from chain — ${blocksBack} blocks...`);
+      const daysBack = ((blocksBack * SECS_PER_BLOCK) / 86400).toFixed(1);
+      log('tracker', `Backfilling ${poolName} from chain — ${blocksBack} blocks (~${daysBack} days)...`);
       const currentBlock = await rpcClient.getBlockNumber();
       const startBlock = currentBlock - BigInt(blocksBack);
       const now = Date.now();
@@ -291,7 +294,16 @@ class PoolTracker extends EventEmitter {
       });
 
       state.backfillBlocks = blocksBack;
-      log('tracker', `Backfilled ${poolName}: ${state.swaps.length} swaps from chain`);
+
+      if (state.swaps.length > 0) {
+        const prices = state.swaps.map(s => s.price);
+        const totalVol = state.swaps.reduce((sum, s) => sum + s.volumeUSD, 0);
+        const totalFees = state.swaps.reduce((sum, s) => sum + s.feeUSD, 0);
+        const latestPrice = state.swaps[state.swaps.length - 1].price;
+        log('tracker', `Backfilled ${poolName}: ${state.swaps.length} swaps | latest $${latestPrice.toFixed(2)} | range $${Math.min(...prices).toFixed(2)}–$${Math.max(...prices).toFixed(2)} | total vol $${totalVol.toFixed(2)} | total fees $${totalFees.toFixed(2)}`);
+      } else {
+        log('tracker', `Backfilled ${poolName}: 0 swaps found on chain`);
+      }
 
       await dbInsertSwaps(state.swaps);
       log('db', `Persisted ${state.swaps.length} backfill swaps for ${poolName}`);
@@ -358,6 +370,19 @@ class PoolTracker extends EventEmitter {
       log('tracker', `poll ${blockRange} — ${totalSwaps} swaps [${summary.join(', ')}]`);
 
       if (allNewSwaps.length > 0) {
+        let totalVol = 0;
+        let totalFees = 0;
+        for (const s of allNewSwaps) {
+          totalVol += s.volumeUSD;
+          totalFees += s.feeUSD;
+          log('swap', `${s.pool} | price $${s.price.toLocaleString()} | vol $${s.volumeUSD.toFixed(2)} | fee $${s.feeUSD.toFixed(2)} | block ${s.blockNumber} | tx ${s.txHash.slice(0, 14)}...`);
+        }
+
+        const poolPrices = new Map<string, number>();
+        for (const s of allNewSwaps) poolPrices.set(s.pool, s.price);
+        const priceSnap = Array.from(poolPrices.entries()).map(([p, px]) => `${p}=$${px.toLocaleString()}`).join(', ');
+        log('tracker', `poll totals — vol $${totalVol.toFixed(2)} | fees $${totalFees.toFixed(2)} | prices [${priceSnap}]`);
+
         dbInsertSwaps(allNewSwaps).catch(() => {});
       }
 

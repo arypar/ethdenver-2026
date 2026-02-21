@@ -5,39 +5,27 @@ import { Button } from '@/components/ui/button';
 import { ActionDetailDialog } from './ActionDetailDialog';
 import { ExecuteDialog } from './ExecuteDialog';
 import { cn } from '@/lib/utils';
-import { Zap, Eye, PlayCircle, XCircle, Inbox, Radio, Trash2 } from 'lucide-react';
-import type { ActionItem, ActionStatus, Rule } from '@/lib/types';
-import { generateTriggerData } from '@/lib/mock-data';
+import { Eye, PlayCircle, XCircle, Inbox, Radio, Trash2 } from 'lucide-react';
+import type { ActionItem, ActionStatus } from '@/lib/types';
 
 type Filter = 'All' | 'Pending' | 'Completed' | 'Dismissed';
 const FILTERS: Filter[] = ['All', 'Pending', 'Completed', 'Dismissed'];
 
 interface ActionsInboxProps {
   actions: ActionItem[];
-  rules: Rule[];
   connected: boolean;
   onUpdateStatus: (id: string, status: ActionStatus) => void;
-  onAddAction: (action: ActionItem) => void;
   onClearAll: () => void;
   onConnectRequired: () => void;
 }
 
-export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddAction, onClearAll, onConnectRequired }: ActionsInboxProps) {
+export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, onConnectRequired }: ActionsInboxProps) {
   const [filter, setFilter] = useState<Filter>('All');
   const [reviewAction, setReviewAction] = useState<ActionItem | null>(null);
   const [executeState, setExecuteState] = useState<{ open: boolean; id: string; label: string; pool: string }>({ open: false, id: '', label: '', pool: '' });
 
   const filtered = actions.filter(a => filter === 'All' || a.status === filter);
   const liveCount = actions.filter(a => a.source === 'live').length;
-
-  const simulateGlobal = () => {
-    if (rules.length === 0) return;
-    const rule = rules[Math.floor(Math.random() * rules.length)];
-    const trig = generateTriggerData(rule.name, rule.trigger.pool);
-    onAddAction({ id: crypto.randomUUID(), ruleId: rule.id, ruleName: rule.name, status: 'Pending',
-      triggerReason: trig.triggerReason, suggestedAction: trig.suggestedAction, timestamp: Date.now(), source: 'simulated',
-      details: { eventType: rule.trigger.type, pool: rule.trigger.pool, conditionsMet: trig.conditionsMet, proposedActions: trig.proposedActions } });
-  };
 
   const handleExecute = (id: string) => {
     if (!connected) { onConnectRequired(); return; }
@@ -69,10 +57,6 @@ export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddA
               <Trash2 className="h-3.5 w-3.5" /> Clear All
             </Button>
           )}
-          <Button size="sm" className="rounded-xl text-[12px] font-semibold" onClick={simulateGlobal} disabled={rules.length === 0}
-            style={{ boxShadow: '0 0 16px rgba(255,0,122,0.2)' }}>
-            <Zap className="h-3.5 w-3.5" /> Simulate
-          </Button>
         </div>
       </div>
 
@@ -85,9 +69,7 @@ export function ActionsInbox({ actions, rules, connected, onUpdateStatus, onAddA
             {filter === 'All' ? 'No actions yet' : `No ${filter.toLowerCase()} actions`}
           </p>
           <p className="mt-1 max-w-[260px] text-[13px] text-white/30">
-            {rules.length === 0
-              ? 'Create rules first. Enabled rules auto-fire on live swaps.'
-              : 'Enabled rules fire automatically on live swap events. You can also use Simulate.'}
+            Enabled rules evaluate on the server against every live swap — even when this page is closed.
           </p>
         </div>
       ) : (
