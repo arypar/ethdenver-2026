@@ -105,25 +105,6 @@ export function setupWebSocket(server: Server) {
     }
   });
 
-  function broadcastBackfillEvent(type: 'backfill_progress' | 'backfill_complete', data: { pool: string; progress?: number }) {
-    const msg = JSON.stringify({ type, ...data });
-    let sent = 0;
-    for (const [ws, state] of clients) {
-      if (state.pools.has(data.pool) && ws.readyState === WebSocket.OPEN) {
-        ws.send(msg);
-        sent++;
-      }
-    }
-    if (sent > 0 && type === 'backfill_complete') {
-      log('ws', `Broadcast ${type} for ${data.pool} → ${sent} client(s)`);
-    }
-  }
-
-  tracker.on('backfill_progress', (data: { pool: string; progress: number }) => broadcastBackfillEvent('backfill_progress', data));
-  tracker.on('backfill_complete', (data: { pool: string }) => broadcastBackfillEvent('backfill_complete', data));
-  monadTracker.on('backfill_progress', (data: { pool: string; progress: number }) => broadcastBackfillEvent('backfill_progress', data));
-  monadTracker.on('backfill_complete', (data: { pool: string }) => broadcastBackfillEvent('backfill_complete', data));
-
   const heartbeat = setInterval(() => {
     for (const [ws, state] of clients) {
       if (!state.alive) {

@@ -111,21 +111,22 @@ router.post('/chart-data', async (req, res) => {
       }
     }
 
-    let backfilling = false;
-    if (!monadTracker.hasBackfill(addr, config.blocksBack)) {
+    // Trigger backfill if needed (non-blocking)
+    if (!monadTracker.hasBackfill(addr, config.blocksBack) && !monadTracker.isBackfilling(addr)) {
       log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — triggering background backfill`);
       monadTracker.backfill(addr, config.blocksBack).catch(err =>
         logError('monad-chart', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
       );
-      backfilling = true;
     }
 
+    const backfilling = monadTracker.isBackfilling(addr);
+
+    // Serve whatever data is available (grows incrementally during backfill)
     const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
     const swaps = monadTracker.getSwaps(addr, sinceMs);
-    log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps`);
+    log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps (backfilling: ${backfilling})`);
 
     if (swaps.length === 0) {
-      log('monad-chart', `${addr.slice(0, 10)} — no swaps yet (backfilling: ${backfilling})`);
       res.json({ data: [], backfilling });
       return;
     }

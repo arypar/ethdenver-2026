@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { ChainId, Rule, SavedChart, ActionItem, ActionStatus } from './types';
 import { fetchChartData } from './pool-data';
-import { wsClient } from './ws-client';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
@@ -66,42 +65,20 @@ interface DbChart {
   createdAt: number;
 }
 
-const BACKFILL_POLL_MS = 3_000;
+const BACKFILL_POLL_MS = 2_000;
 
 export function useSavedCharts(chain: ChainId = 'eth') {
   const [charts, setCharts] = useState<SavedChart[]>([]);
-  const backfillTimers = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
-
-  const startBackfillPoll = useCallback((chartId: string, metric: SavedChart['config']['metric'], pool: string, range: string, chainId: ChainId) => {
-    if (backfillTimers.current.has(chartId)) return;
-    const timer = setInterval(() => {
-      fetchChartData(metric, pool, range as any, chainId)
-        .then(({ data, backfilling }) => {
-          setCharts(prev => prev.map(c => {
-            if (c.id !== chartId) return c;
-            if (data.length > 0) return { ...c, data, backfilling };
-            return { ...c, backfilling };
-          }));
-          if (!backfilling) {
-            clearInterval(timer);
-            backfillTimers.current.delete(chartId);
-          }
-        })
-        .catch(() => {});
-    }, BACKFILL_POLL_MS);
-    backfillTimers.current.set(chartId, timer);
-  }, []);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       const dbCharts = await apiGet<DbChart[]>(`/api/charts?chain=${chain}`);
-
       if (cancelled) return;
 
       const source = dbCharts && dbCharts.length > 0 ? dbCharts : [];
-
       if (source.length === 0) return;
 
       const withEmptyData: SavedChart[] = source.map(c => ({
@@ -121,72 +98,45 @@ export function useSavedCharts(chain: ChainId = 'eth') {
 
       setCharts(withEmptyData);
 
+      // Initial fetch for each chart
       for (const chart of withEmptyData) {
         if (chart.config.metric === 'Liquidity') continue;
         fetchChartData(chart.config.metric, chart.config.pool, chart.config.range, chain)
           .then(({ data, backfilling }) => {
             if (cancelled) return;
             setCharts(prev => prev.map(c => c.id === chart.id ? { ...c, data, backfilling } : c));
-            if (backfilling) {
-              startBackfillPoll(chart.id, chart.config.metric, chart.config.pool, chart.config.range, chain);
-            }
           })
           .catch(() => {});
       }
     })();
 
-    return () => {
-      cancelled = true;
-      for (const timer of backfillTimers.current.values()) clearInterval(timer);
-      backfillTimers.current.clear();
-    };
-  }, [chain, startBackfillPoll]);
+    return () => { cancelled = true; };
+  }, [chain]);
 
-  // Listen for WebSocket backfill progress updates
+  // Poll for any charts that are backfilling to get incremental data
   useEffect(() => {
-    const unsubProgress = wsClient.onBackfillProgress((data) => {
-      setCharts(prev => prev.map(c => {
-        const poolId = c.config.chain === 'monad' ? c.config.pool.toLowerCase() : c.config.pool;
-        if (poolId === data.pool && c.backfilling) {
-          return { ...c, backfillProgress: data.progress };
-        }
-        return c;
-      }));
-    });
+    if (pollTimer.current) clearInterval(pollTimer.current);
 
-    const unsubComplete = wsClient.onBackfillComplete((data) => {
+    pollTimer.current = setInterval(() => {
       setCharts(prev => {
-        const affected = prev.filter(c => {
-          const poolId = c.config.chain === 'monad' ? c.config.pool.toLowerCase() : c.config.pool;
-          return poolId === data.pool && c.backfilling;
-        });
-        for (const chart of affected) {
+        const backfillingCharts = prev.filter(c => c.backfilling && c.config.metric !== 'Liquidity');
+        if (backfillingCharts.length === 0) return prev;
+
+        for (const chart of backfillingCharts) {
           const chainId = (chart.config.chain || chain) as ChainId;
           fetchChartData(chart.config.metric, chart.config.pool, chart.config.range, chainId)
-            .then(({ data: chartData }) => {
-              setCharts(p => p.map(c => c.id === chart.id
-                ? { ...c, data: chartData, backfilling: false, backfillProgress: undefined }
-                : c,
-              ));
+            .then(({ data, backfilling }) => {
+              setCharts(p => p.map(c => c.id === chart.id ? { ...c, data, backfilling } : c));
             })
             .catch(() => {});
-          const timer = backfillTimers.current.get(chart.id);
-          if (timer) {
-            clearInterval(timer);
-            backfillTimers.current.delete(chart.id);
-          }
         }
-        return prev.map(c => {
-          const poolId = c.config.chain === 'monad' ? c.config.pool.toLowerCase() : c.config.pool;
-          if (poolId === data.pool && c.backfilling) {
-            return { ...c, backfillProgress: 100 };
-          }
-          return c;
-        });
+        return prev;
       });
-    });
+    }, BACKFILL_POLL_MS);
 
-    return () => { unsubProgress(); unsubComplete(); };
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
   }, [chain]);
 
   const add = useCallback((chart: SavedChart) => {

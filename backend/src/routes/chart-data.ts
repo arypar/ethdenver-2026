@@ -120,34 +120,26 @@ router.post('/chart-data', async (req, res) => {
     const feeFraction = meta ? meta.feeTier / 1_000_000 : 0.003;
     const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
 
-    let swaps: SwapRecord[];
-    let backfilling = false;
-
-    if (DB_ENABLED) {
-      swaps = await dbQuerySwaps(pool, sinceMs);
-      log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps from DB`);
-
-      if (swaps.length === 0 && !tracker.hasBackfill(pool, config.blocksBack)) {
-        log('chart-data', `${pool} ${metric} ${range} — DB empty, triggering background backfill`);
-        tracker.backfill(pool, config.blocksBack).catch(err =>
-          logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
-        );
-        backfilling = true;
-      }
-    } else {
-      if (!tracker.hasBackfill(pool, config.blocksBack)) {
-        log('chart-data', `${pool} ${metric} ${range} — triggering background backfill`);
-        tracker.backfill(pool, config.blocksBack).catch(err =>
-          logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
-        );
-        backfilling = true;
-      }
-      swaps = tracker.getSwaps(pool, sinceMs);
-      log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps from memory`);
+    // Trigger backfill if needed (non-blocking)
+    if (!tracker.hasBackfill(pool, config.blocksBack) && !tracker.isBackfilling(pool)) {
+      log('chart-data', `${pool} ${metric} ${range} — triggering background backfill`);
+      tracker.backfill(pool, config.blocksBack).catch(err =>
+        logError('chart-data', `Background backfill failed: ${err instanceof Error ? err.message : 'unknown'}`),
+      );
     }
 
+    const backfilling = tracker.isBackfilling(pool);
+
+    // Serve whatever data is available (grows incrementally during backfill)
+    let swaps: SwapRecord[];
+    if (DB_ENABLED) {
+      swaps = await dbQuerySwaps(pool, sinceMs);
+    } else {
+      swaps = tracker.getSwaps(pool, sinceMs);
+    }
+    log('chart-data', `${pool} ${metric} ${range} — ${swaps.length} swaps (backfilling: ${backfilling})`);
+
     if (swaps.length === 0) {
-      log('chart-data', `${pool} ${metric} ${range} — no swaps yet, returning empty (backfilling: ${backfilling})`);
       res.json({ data: [], backfilling });
       return;
     }

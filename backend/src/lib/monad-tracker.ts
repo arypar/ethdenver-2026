@@ -296,10 +296,7 @@ class MonadTokenTracker extends EventEmitter {
     const state = this.tokens.get(addr);
     if (!state) return;
     if (state.backfillBlocks >= blocksBack) return;
-    if (state.backfilling) {
-      while (state.backfilling) await new Promise(r => setTimeout(r, 500));
-      if (state.backfillBlocks >= blocksBack) return;
-    }
+    if (state.backfilling) return; // don't wait — callers should check isBackfilling()
 
     state.backfilling = true;
     try {
@@ -319,83 +316,77 @@ class MonadTokenTracker extends EventEmitter {
         log('monad-tracker', `Backfilled ${label} via API: ${converted.length} swaps | vol ${totalVol.toFixed(2)} MON`);
         await dbClearMonadSwaps(addr);
         await dbInsertMonadSwaps(converted);
-        this.emit('backfill_complete', { pool: addr });
         return;
       }
 
-      // Fall back to on-chain log scanning
+      // Fall back to on-chain log scanning with incremental writes
       const currentBlock = await rpc.getBlockNumber();
       const startBlock = currentBlock - BigInt(blocksBack);
       log('monad-tracker', `${label}: API returned 0 swaps — scanning ${blocksBack} blocks on-chain...`);
 
-      let buyPct = 0;
-      let sellPct = 0;
-      const emitCombinedProgress = () => {
-        this.emit('backfill_progress', { pool: addr, progress: Math.round((buyPct + sellPct) / 2) });
+      const parseBuyLog = (entry: any): MonadSwapRecord => {
+        const { sender, token, amountIn, amountOut } = entry.args as {
+          sender: string; token: string; amountIn: bigint; amountOut: bigint;
+        };
+        const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
+        const ts = now - blockDiff * SECS_PER_BLOCK * 1000;
+        return {
+          token: token.toLowerCase(), direction: 'buy',
+          amountIn: amountIn.toString(), amountOut: amountOut.toString(),
+          price: computePrice('buy', amountIn, amountOut),
+          volumeMON: Number(formatEther(amountIn)),
+          sender, blockNumber: Number(entry.blockNumber),
+          txHash: entry.transactionHash ?? '', timestamp: ts,
+        };
       };
 
-      const [buyLogs, sellLogs] = await Promise.all([
-        this.fetchLogs(CURVE_BUY_EVENT, addr as `0x${string}`, startBlock, currentBlock, (pct) => { buyPct = pct; emitCombinedProgress(); }),
-        this.fetchLogs(CURVE_SELL_EVENT, addr as `0x${string}`, startBlock, currentBlock, (pct) => { sellPct = pct; emitCombinedProgress(); }),
+      const parseSellLog = (entry: any): MonadSwapRecord => {
+        const { sender, token, amountIn, amountOut } = entry.args as {
+          sender: string; token: string; amountIn: bigint; amountOut: bigint;
+        };
+        const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
+        const ts = now - blockDiff * SECS_PER_BLOCK * 1000;
+        return {
+          token: token.toLowerCase(), direction: 'sell',
+          amountIn: amountIn.toString(), amountOut: amountOut.toString(),
+          price: computePrice('sell', amountIn, amountOut),
+          volumeMON: Number(formatEther(amountOut)),
+          sender, blockNumber: Number(entry.blockNumber),
+          txHash: entry.transactionHash ?? '', timestamp: ts,
+        };
+      };
+
+      const onBuyBatch = (logs: any[]) => {
+        const swaps = logs.map(parseBuyLog);
+        if (swaps.length > 0) {
+          state.swaps.push(...swaps);
+          state.swaps.sort((a, b) => a.blockNumber - b.blockNumber);
+          dbInsertMonadSwaps(swaps).catch(() => {});
+        }
+      };
+
+      const onSellBatch = (logs: any[]) => {
+        const swaps = logs.map(parseSellLog);
+        if (swaps.length > 0) {
+          state.swaps.push(...swaps);
+          state.swaps.sort((a, b) => a.blockNumber - b.blockNumber);
+          dbInsertMonadSwaps(swaps).catch(() => {});
+        }
+      };
+
+      await Promise.all([
+        this.fetchLogs(CURVE_BUY_EVENT, addr as `0x${string}`, startBlock, currentBlock, onBuyBatch),
+        this.fetchLogs(CURVE_SELL_EVENT, addr as `0x${string}`, startBlock, currentBlock, onSellBatch),
       ]);
 
-      const newSwaps: MonadSwapRecord[] = [];
+      state.backfillBlocks = blocksBack;
 
-      for (const entry of buyLogs) {
-        const { sender, token, amountIn, amountOut } = entry.args as {
-          sender: string; token: string; amountIn: bigint; amountOut: bigint;
-        };
-        const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
-        const ts = now - blockDiff * SECS_PER_BLOCK * 1000;
-        const price = computePrice('buy', amountIn, amountOut);
-        newSwaps.push({
-          token: token.toLowerCase(),
-          direction: 'buy',
-          amountIn: amountIn.toString(),
-          amountOut: amountOut.toString(),
-          price,
-          volumeMON: Number(formatEther(amountIn)),
-          sender,
-          blockNumber: Number(entry.blockNumber),
-          txHash: entry.transactionHash ?? '',
-          timestamp: ts,
-        });
-      }
-
-      for (const entry of sellLogs) {
-        const { sender, token, amountIn, amountOut } = entry.args as {
-          sender: string; token: string; amountIn: bigint; amountOut: bigint;
-        };
-        const blockDiff = Number(currentBlock - BigInt(entry.blockNumber));
-        const ts = now - blockDiff * SECS_PER_BLOCK * 1000;
-        const price = computePrice('sell', amountIn, amountOut);
-        newSwaps.push({
-          token: token.toLowerCase(),
-          direction: 'sell',
-          amountIn: amountIn.toString(),
-          amountOut: amountOut.toString(),
-          price,
-          volumeMON: Number(formatEther(amountOut)),
-          sender,
-          blockNumber: Number(entry.blockNumber),
-          txHash: entry.transactionHash ?? '',
-          timestamp: ts,
-        });
-      }
-
-      newSwaps.sort((a, b) => a.blockNumber - b.blockNumber);
-
-      if (newSwaps.length > 0) {
-        const totalVol = newSwaps.reduce((s, sw) => s + sw.volumeMON, 0);
-        log('monad-tracker', `Backfilled ${label}: ${newSwaps.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+      if (state.swaps.length > 0) {
+        const totalVol = state.swaps.reduce((s, sw) => s + sw.volumeMON, 0);
+        log('monad-tracker', `Backfilled ${label}: ${state.swaps.length} swaps | vol ${totalVol.toFixed(2)} MON`);
       } else {
         log('monad-tracker', `Backfilled ${label}: 0 swaps (on-chain + API)`);
       }
-
-      state.swaps = newSwaps;
-      state.backfillBlocks = blocksBack;
-      await dbInsertMonadSwaps(newSwaps);
-      this.emit('backfill_complete', { pool: addr });
     } catch (err) {
       logError('monad-tracker', `Backfill failed: ${err instanceof Error ? err.message : 'unknown'}`);
     } finally {
@@ -567,7 +558,7 @@ class MonadTokenTracker extends EventEmitter {
     }
   }
 
-  private async fetchLogs(event: any, tokenAddress: `0x${string}`, fromBlock: bigint, toBlock: bigint, onProgress?: (pct: number) => void): Promise<any[]> {
+  private async fetchLogs(event: any, tokenAddress: `0x${string}`, fromBlock: bigint, toBlock: bigint, onBatch?: (logs: any[]) => void): Promise<void> {
     const chunks: Array<{ from: bigint; to: bigint }> = [];
     let from = fromBlock;
     while (from <= toBlock) {
@@ -576,20 +567,15 @@ class MonadTokenTracker extends EventEmitter {
       from = to + BigInt(1);
     }
 
-    const totalBatches = Math.ceil(chunks.length / CONCURRENCY);
-    let batchesDone = 0;
-
-    const allLogs: any[] = [];
     for (let i = 0; i < chunks.length; i += CONCURRENCY) {
       const batch = chunks.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
         batch.map(({ from: f, to: t }) => this.fetchLogsChunk(event, tokenAddress, f, t)),
       );
-      for (const logs of results) allLogs.push(...logs);
-      batchesDone++;
-      if (onProgress) onProgress(Math.round((batchesDone / totalBatches) * 100));
+      const batchLogs: any[] = [];
+      for (const logs of results) batchLogs.push(...logs);
+      if (onBatch) onBatch(batchLogs);
     }
-    return allLogs;
   }
 
   stop() {
