@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { TrendingUp, TrendingDown, X, ExternalLink, Wifi, WifiOff } from 'lucide-react';
 import { RenderChart } from './ChartCard';
 import { usePoolStream, metricFromSwap, type SwapEvent } from '@/lib/use-pool-stream';
@@ -152,8 +153,10 @@ export function ChartExpandDialog({ chart, open, onClose }: ChartExpandDialogPro
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
         showCloseButton={false}
+        aria-describedby={undefined}
         className="!max-w-none !w-screen !h-screen !rounded-none !border-0 bg-[#07070D] p-0 gap-0 overflow-hidden"
       >
+        <VisuallyHidden><DialogTitle>Expanded Chart View</DialogTitle></VisuallyHidden>
         <style>{`
           @keyframes fadeIn {
             from { opacity: 0; transform: translateY(-4px); }

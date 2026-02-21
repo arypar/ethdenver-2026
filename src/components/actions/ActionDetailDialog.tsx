@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Zap } from 'lucide-react';
 import type { ActionItem } from '@/lib/types';
@@ -28,6 +28,9 @@ export function ActionDetailDialog({ action, open, onClose, onExecute, connected
       <DialogContent className="sm:max-w-md rounded-2xl border-white/[0.1] bg-[#0C0C14]/95 backdrop-blur-2xl">
         <DialogHeader>
           <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em] text-white">Action Details</DialogTitle>
+          <DialogDescription className="text-[12px] text-white/40">
+            Review event conditions and proposed actions
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-5 text-[13px]">

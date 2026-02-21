@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import {
   X, ExternalLink, Droplets, TrendingUp, TrendingDown,
   Wallet, ArrowUpRight, ArrowDownRight, Clock, Hash,
@@ -116,8 +117,10 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent
         showCloseButton={false}
+        aria-describedby={undefined}
         className="!max-w-none !w-screen !h-screen !rounded-none !border-0 bg-[#07070D] p-0 gap-0 overflow-hidden"
       >
+        <VisuallyHidden><DialogTitle>Liquidity Monitor</DialogTitle></VisuallyHidden>
         <style>{`
           @keyframes fadeSlideIn {
             from { opacity: 0; transform: translateY(-6px); }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import {
   CheckCircle2, Loader2, AlertTriangle, ArrowDownUp,
@@ -277,6 +277,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
         to: swapRes.swap.to as `0x${string}`,
         data: swapRes.swap.data as `0x${string}`,
         value: BigInt(swapRes.swap.value || '0'),
+        ...(swapRes.swap.gasLimit ? { gas: BigInt(swapRes.swap.gasLimit) } : {}),
       });
       setTxHash(hash);
       const publicClient = getPublicClient(wagmiConfig, { chainId });
@@ -326,6 +327,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
         }}
       >
         <VisuallyHidden><DialogTitle>Swap</DialogTitle></VisuallyHidden>
+        <VisuallyHidden><DialogDescription>Execute a token swap</DialogDescription></VisuallyHidden>
         {/* Header gradient */}
         <div className="relative px-5 pt-5 pb-4 min-w-0">
           <div className={`absolute inset-0 bg-gradient-to-b ${isMonad ? 'from-purple-500/[0.06]' : 'from-[#FF007A]/[0.06]'} to-transparent pointer-events-none`} />
