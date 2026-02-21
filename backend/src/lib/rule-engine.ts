@@ -80,8 +80,24 @@ async function loadEnabledRules(): Promise<DbRule[]> {
   }));
 }
 
+async function hasPendingAction(ruleId: string): Promise<boolean> {
+  if (!DB_ENABLED || !supabase) return false;
+  const { count, error } = await supabase
+    .from('rule_actions')
+    .select('id', { count: 'exact', head: true })
+    .eq('rule_id', ruleId)
+    .eq('status', 'Pending');
+  if (error) { logError('rule-engine', `Check pending: ${error.message}`); return false; }
+  return (count ?? 0) > 0;
+}
+
 async function insertAction(rule: DbRule, swap: SwapRecord, conditionsMet: string[], proposedActions: string[]) {
   if (!DB_ENABLED || !supabase) return;
+
+  if (await hasPendingAction(rule.id)) {
+    log('rule-engine', `  "${rule.name}" — skipped (pending action already exists)`);
+    return;
+  }
 
   const triggerReason = `${formatUSD(swap.volumeUSD)} swap on ${swap.pool} at $${swap.price.toLocaleString()}`;
   const suggestedAction = proposedActions[0] || 'Review triggered action';

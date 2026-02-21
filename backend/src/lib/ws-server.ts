@@ -93,11 +93,21 @@ export function setupWebSocket(server: Server) {
   log('ws', 'WebSocket server ready on /ws');
 }
 
-export function broadcastMonadTx(tx: Record<string, unknown>) {
-  const msg = JSON.stringify({ type: 'monad_tx', ...tx });
+export function broadcastStreamTx(chain: string, tx: Record<string, unknown>) {
+  const msg = JSON.stringify({ type: 'stream_tx', chain, ...tx });
   for (const [ws] of clients) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(msg);
-    }
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
   }
+}
+
+export function broadcastLiquidityEvent(chain: string, event: Record<string, unknown>) {
+  const msg = JSON.stringify({ type: 'liquidity_event', chain, ...event });
+  for (const [ws] of clients) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  }
+}
+
+/** @deprecated Use broadcastStreamTx('monad', tx) instead */
+export function broadcastMonadTx(tx: Record<string, unknown>) {
+  broadcastStreamTx('monad', tx);
 }

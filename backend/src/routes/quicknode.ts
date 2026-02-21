@@ -123,7 +123,7 @@ function parseBlockTxs(block: RawBlock): ParsedTx[] {
       value: hexToDecStr(tx.value),
       gas_limit: hexToDecStr(tx.gas),
       gas_price: hexToDecStr(tx.gasPrice || tx.maxFeePerGas),
-      method_id: tx.input.slice(0, 10),
+      method_id: (tx.input && tx.input.length >= 10) ? tx.input.slice(0, 10) : '',
       tx_type: tx.type || '0x0',
       block_timestamp: blockDate,
     }));
@@ -168,7 +168,7 @@ router.post('/webhook', async (req, res) => {
       }
 
       for (const tx of txs) {
-        broadcastMonadTx(tx);
+        broadcastMonadTx({ ...tx });
       }
       totalInserted += txs.length;
     }
@@ -290,7 +290,7 @@ router.get('/simulate', async (_req, res) => {
         if (error) logError('quicknode', `Sim DB error: ${error.message}`);
       }
 
-      broadcastMonadTx(tx);
+      broadcastMonadTx({ ...tx });
     }
   }, 1500);
 

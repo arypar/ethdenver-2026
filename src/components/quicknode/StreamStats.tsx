@@ -1,7 +1,7 @@
 'use client';
 
 import { Activity, BarChart3, Box, Users } from 'lucide-react';
-import type { StreamStats as Stats } from '@/lib/use-monad-stream';
+import type { StreamStats as Stats } from '@/lib/use-stream-feed';
 
 interface Props {
   stats: Stats;

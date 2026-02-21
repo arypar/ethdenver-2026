@@ -39,13 +39,13 @@ interface TrackedPoolState {
   backfilling: boolean;
 }
 
-function tickToPrice(tick: number, decimals0: number, decimals1: number, invert: boolean): number {
+export function tickToPrice(tick: number, decimals0: number, decimals1: number, invert: boolean): number {
   const rawPrice = 1.0001 ** tick;
   const humanPrice = rawPrice * 10 ** (decimals0 - decimals1);
   return invert ? 1 / humanPrice : humanPrice;
 }
 
-function swapVolumeUSD(amount0: bigint, amount1: bigint, price: number, meta: PoolMeta): number {
+export function swapVolumeUSD(amount0: bigint, amount1: bigint, price: number, meta: PoolMeta): number {
   const abs0 = amount0 < BigInt(0) ? -amount0 : amount0;
   const abs1 = amount1 < BigInt(0) ? -amount1 : amount1;
   const human0 = Number(formatUnits(abs0, meta.decimals0));
@@ -231,6 +231,46 @@ class PoolTracker extends EventEmitter {
 
   getPoolMeta(poolName: string): PoolMeta | undefined {
     return this.pools.get(poolName)?.meta;
+  }
+
+  getPoolMetaByAddress(address: string): { name: string; meta: PoolMeta } | undefined {
+    const lower = address.toLowerCase();
+    for (const [name, state] of this.pools) {
+      if (state.meta.address.toLowerCase() === lower) return { name, meta: state.meta };
+    }
+    return undefined;
+  }
+
+  ingestSwapEvent(poolAddress: string, args: { amount0: bigint; amount1: bigint; tick: number }, blockNumber: number, txHash: string): SwapRecord | null {
+    const match = this.getPoolMetaByAddress(poolAddress);
+    if (!match) return null;
+
+    const { name, meta } = match;
+    const state = this.pools.get(name);
+    if (!state) return null;
+
+    const price = tickToPrice(args.tick, meta.decimals0, meta.decimals1, meta.invert);
+    const volumeUSD = swapVolumeUSD(args.amount0, args.amount1, price, meta);
+    const feeUSD = volumeUSD * (meta.feeTier / 1_000_000);
+
+    const swap: SwapRecord = {
+      pool: name,
+      blockNumber,
+      price: Math.round(price * 100) / 100,
+      volumeUSD: Math.round(volumeUSD * 100) / 100,
+      feeUSD: Math.round(feeUSD * 100) / 100,
+      txHash,
+      timestamp: Date.now(),
+    };
+
+    state.swaps.push(swap);
+    this.emit('swap', swap);
+
+    dbInsertSwaps([swap]).catch(() => {});
+
+    log('swap', `${swap.pool} | price $${swap.price.toLocaleString()} | vol $${swap.volumeUSD.toFixed(2)} | fee $${swap.feeUSD.toFixed(2)} | block ${swap.blockNumber} | tx ${swap.txHash.slice(0, 14)}... [stream]`);
+
+    return swap;
   }
 
   hasBackfill(poolName: string, blocksNeeded: number): boolean {

@@ -2,11 +2,12 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import type { MonadTx } from '@/lib/use-monad-stream';
-import { METHOD_NAMES } from '@/lib/use-monad-stream';
+import type { StreamTx, Chain } from '@/lib/use-stream-feed';
+import { METHOD_NAMES, CHAIN_CONFIG } from '@/lib/use-stream-feed';
 
 interface Props {
-  transactions: MonadTx[];
+  transactions: StreamTx[];
+  chain: Chain;
 }
 
 function truncate(addr: string | null, chars = 6): string {
@@ -15,10 +16,11 @@ function truncate(addr: string | null, chars = 6): string {
   return `${addr.slice(0, chars + 2)}...${addr.slice(-chars)}`;
 }
 
-function formatValue(raw: string): string {
+function formatValue(raw: string | undefined): string {
+  if (!raw || raw === '0') return '0';
   try {
     const wei = BigInt(raw);
-    if (wei === 0n) return '0';
+    if (wei === BigInt(0)) return '0';
     const eth = Number(wei) / 1e18;
     if (eth < 0.0001) return '<0.0001';
     return eth.toFixed(4);
@@ -35,17 +37,14 @@ function timeAgo(iso: string): string {
   return `${Math.floor(diff / 3600)}h ago`;
 }
 
-const MONAD_EXPLORER = 'https://monadscan.com';
-
-export function TransactionFeed({ transactions }: Props) {
+export function TransactionFeed({ transactions, chain }: Props) {
+  const cfg = CHAIN_CONFIG[chain];
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const prevLenRef = useRef(0);
 
   useEffect(() => {
-    if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = 0;
-    }
+    if (autoScroll && containerRef.current) containerRef.current.scrollTop = 0;
   }, [transactions.length, autoScroll]);
 
   useEffect(() => {
@@ -65,7 +64,7 @@ export function TransactionFeed({ transactions }: Props) {
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
           </svg>
         </div>
-        <p className="text-sm text-white/50">Waiting for transactions...</p>
+        <p className="text-sm text-white/50">Waiting for {cfg.label} transactions...</p>
         <p className="text-xs text-white/30 mt-1">
           Start the simulator or connect a QuickNode Stream
         </p>
@@ -75,38 +74,30 @@ export function TransactionFeed({ transactions }: Props) {
 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-xl overflow-hidden">
-      {/* Table header */}
       <div className="grid grid-cols-[80px_1fr_1fr_1fr_120px_100px_80px] gap-2 px-4 py-2.5 border-b border-white/[0.06] text-[11px] font-medium text-white/30 uppercase tracking-wider">
         <span>Block</span>
         <span>Tx Hash</span>
         <span>From</span>
         <span>To</span>
         <span>Method</span>
-        <span className="text-right">Value (MON)</span>
+        <span className="text-right">Value ({cfg.nativeToken})</span>
         <span className="text-right">Age</span>
       </div>
 
-      {/* Scrollable rows */}
-      <div
-        ref={containerRef}
-        onScroll={handleScroll}
-        className="max-h-[520px] overflow-y-auto"
-      >
+      <div ref={containerRef} onScroll={handleScroll} className="max-h-[520px] overflow-y-auto">
         {transactions.map((tx, i) => {
           const isNew = i === 0 && transactions.length > prevLenRef.current;
           return (
             <div
-              key={tx.tx_hash}
-              className={`grid grid-cols-[80px_1fr_1fr_1fr_120px_100px_80px] gap-2 px-4 py-2 border-b border-white/[0.03] text-[13px] transition-colors hover:bg-white/[0.04] ${
-                isNew ? 'animate-flash' : ''
-              }`}
+              key={tx.tx_hash + i}
+              className={`grid grid-cols-[80px_1fr_1fr_1fr_120px_100px_80px] gap-2 px-4 py-2 border-b border-white/[0.03] text-[13px] transition-colors hover:bg-white/[0.04] ${isNew ? 'animate-flash' : ''}`}
             >
               <span className="text-white/60 font-mono tabular-nums">
-                {tx.block_number.toLocaleString()}
+                {tx.block_number?.toLocaleString()}
               </span>
 
               <a
-                href={`${MONAD_EXPLORER}/tx/${tx.tx_hash}`}
+                href={`${cfg.explorer}/tx/${tx.tx_hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-1 text-primary/80 hover:text-primary font-mono truncate"
@@ -143,10 +134,7 @@ export function TransactionFeed({ transactions }: Props) {
 
       {!autoScroll && (
         <button
-          onClick={() => {
-            setAutoScroll(true);
-            if (containerRef.current) containerRef.current.scrollTop = 0;
-          }}
+          onClick={() => { setAutoScroll(true); if (containerRef.current) containerRef.current.scrollTop = 0; }}
           className="w-full py-2 text-xs text-primary/70 hover:text-primary border-t border-white/[0.06] transition-colors"
         >
           Scroll to latest

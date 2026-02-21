@@ -13,6 +13,7 @@ import rulesRouter from './routes/rules.js';
 import actionsRouter from './routes/actions.js';
 import testRouter from './routes/test.js';
 import quicknodeRouter from './routes/quicknode.js';
+import streamsRouter from './routes/streams.js';
 import { tracker } from './lib/pool-tracker.js';
 import { setupWebSocket } from './lib/ws-server.js';
 import { startRuleEngine } from './lib/rule-engine.js';
@@ -52,6 +53,7 @@ app.use('/api', rulesRouter);
 app.use('/api', actionsRouter);
 app.use('/', testRouter);
 app.use('/quicknode', quicknodeRouter);
+app.use('/streams', streamsRouter);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now(), trackedPools: tracker.trackedPools() });

@@ -2,12 +2,20 @@
 
 import Link from 'next/link';
 import { ArrowLeft, Radio } from 'lucide-react';
+import type { Chain } from '@/lib/use-stream-feed';
+import { CHAIN_CONFIG } from '@/lib/use-stream-feed';
 
 interface Props {
   connected: boolean;
+  chain: Chain;
+  onChainChange: (chain: Chain) => void;
 }
 
-export function QuickNodeHeader({ connected }: Props) {
+const CHAINS: Chain[] = ['eth', 'monad'];
+
+export function QuickNodeHeader({ connected, chain, onChainChange }: Props) {
+  const cfg = CHAIN_CONFIG[chain];
+
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-2xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
@@ -26,7 +34,7 @@ export function QuickNodeHeader({ connected }: Props) {
             </div>
             <div>
               <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-white">
-                Monad Stream
+                Uniswap Streams
               </h1>
               <p className="text-[11px] text-white/40 -mt-0.5">
                 QuickNode Streams &times; Uniswap
@@ -36,6 +44,23 @@ export function QuickNodeHeader({ connected }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Chain toggle */}
+          <div className="flex items-center rounded-xl border border-white/[0.08] bg-white/[0.04] p-0.5">
+            {CHAINS.map((c) => (
+              <button
+                key={c}
+                onClick={() => onChainChange(c)}
+                className={`px-3 py-1 rounded-lg text-[12px] font-medium transition-all ${
+                  chain === c
+                    ? 'bg-primary/20 text-primary border border-primary/30'
+                    : 'text-white/40 hover:text-white/60 border border-transparent'
+                }`}
+              >
+                {CHAIN_CONFIG[c].icon} {CHAIN_CONFIG[c].label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
             <div
               className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`}
@@ -47,12 +72,8 @@ export function QuickNodeHeader({ connected }: Props) {
           </div>
 
           <div className="hidden sm:flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#836EF9" fillOpacity="0.8" />
-              <path d="M2 17l10 5 10-5" stroke="#836EF9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 12l10 5 10-5" stroke="#836EF9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-[12px] font-medium text-white/60">Monad Testnet</span>
+            <span className="text-[14px]">{cfg.icon}</span>
+            <span className="text-[12px] font-medium text-white/60">{cfg.label}</span>
           </div>
         </div>
       </div>
