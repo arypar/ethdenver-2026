@@ -4,9 +4,9 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import {
   CheckCircle2, Loader2, AlertTriangle, ArrowDownUp,
-  ExternalLink, RefreshCw, Shield, Fuel,
+  ExternalLink, RefreshCw, Shield, Fuel, Globe,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAccount, useConfig } from 'wagmi';
 import { getWalletClient, getPublicClient, switchChain } from '@wagmi/core';
 import {
@@ -55,11 +55,27 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
   const [txHash, setTxHash] = useState('');
   const [poolTokens, setPoolTokens] = useState<PoolTokens | null>(null);
 
-  const { address } = useAccount();
+  const { address, chainId: walletChainId } = useAccount();
   const wagmiConfig = useConfig();
+  const [isSwitchingChain, setIsSwitchingChain] = useState(false);
 
   const poolKey = (pool ?? 'WETH/USDC') as Pool;
   const tokenAddress = isMonad ? (pool ?? '') : '';
+
+  const requiredChainId = isMonad ? MONAD_CHAIN_ID : (poolTokens?.chainId ?? 1);
+  const requiredChainName = isMonad ? 'Monad' : 'Ethereum';
+  const isWrongChain = walletChainId !== undefined && walletChainId !== requiredChainId;
+
+  const handleSwitchChain = useCallback(async () => {
+    setIsSwitchingChain(true);
+    try {
+      await switchChain(wagmiConfig, { chainId: requiredChainId });
+    } catch {
+      // User rejected or switch failed — prompt stays visible
+    } finally {
+      setIsSwitchingChain(false);
+    }
+  }, [wagmiConfig, requiredChainId]);
 
   useEffect(() => {
     if (open) {
@@ -115,9 +131,7 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
     setStep('quoting');
     setError('');
     try {
-      // Switch to Monad early so the wallet is ready for the swap
-      try { await switchChain(wagmiConfig, { chainId: MONAD_CHAIN_ID }); } catch {}
-
+      await switchChain(wagmiConfig, { chainId: MONAD_CHAIN_ID });
       const q = await getNadfunQuote(tokenAddress, amount, isBuy);
       setNadfunQuoteData(q);
 
@@ -432,21 +446,47 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
                 </div>
               </div>
 
-              <button
-                onClick={isMonad ? handleGetNadfunQuote : handleGetQuote}
-                disabled={!amount || Number(amount) <= 0}
-                className="mt-1 h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: isMonad
-                    ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
-                    : 'linear-gradient(135deg, #FF007A 0%, #D63384 100%)',
-                  boxShadow: isMonad
-                    ? '0 0 24px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1)'
-                    : '0 0 24px rgba(255,0,122,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
-                }}
-              >
-                Get Quote
-              </button>
+              {isWrongChain ? (
+                <>
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 flex items-start gap-3">
+                    <Globe className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-amber-200/60">
+                      Your wallet is connected to the wrong network. Switch to <span className="text-amber-300 font-medium">{requiredChainName}</span> to continue.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSwitchChain}
+                    disabled={isSwitchingChain}
+                    className="mt-1 h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                    style={{
+                      background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                      boxShadow: '0 0 24px rgba(245,158,11,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    {isSwitchingChain ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Switching...</>
+                    ) : (
+                      <>Switch to {requiredChainName}</>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={isMonad ? handleGetNadfunQuote : handleGetQuote}
+                  disabled={!amount || Number(amount) <= 0}
+                  className="mt-1 h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: isMonad
+                      ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
+                      : 'linear-gradient(135deg, #FF007A 0%, #D63384 100%)',
+                    boxShadow: isMonad
+                      ? '0 0 24px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1)'
+                      : '0 0 24px rgba(255,0,122,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+                  }}
+                >
+                  Get Quote
+                </button>
+              )}
             </>
           )}
 
@@ -542,20 +582,38 @@ export function ExecuteDialog({ open, onClose, onConfirm, label, pool, chain }: 
                 <DetailRow label="Slippage" value="1%" />
               </div>
 
-              <button
-                onClick={isMonad ? handleNadfunSwap : handleSwap}
-                className="h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all"
-                style={{
-                  background: isMonad
-                    ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
-                    : 'linear-gradient(135deg, #FF007A 0%, #D63384 100%)',
-                  boxShadow: isMonad
-                    ? '0 0 24px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1)'
-                    : '0 0 24px rgba(255,0,122,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
-                }}
-              >
-                Confirm Swap
-              </button>
+              {isWrongChain ? (
+                <button
+                  onClick={handleSwitchChain}
+                  disabled={isSwitchingChain}
+                  className="h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+                    boxShadow: '0 0 24px rgba(245,158,11,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+                  }}
+                >
+                  {isSwitchingChain ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Switching...</>
+                  ) : (
+                    <>Switch to {requiredChainName}</>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={isMonad ? handleNadfunSwap : handleSwap}
+                  className="h-12 w-full rounded-xl text-[14px] font-semibold text-white transition-all"
+                  style={{
+                    background: isMonad
+                      ? 'linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%)'
+                      : 'linear-gradient(135deg, #FF007A 0%, #D63384 100%)',
+                    boxShadow: isMonad
+                      ? '0 0 24px rgba(139,92,246,0.25), inset 0 1px 0 rgba(255,255,255,0.1)'
+                      : '0 0 24px rgba(255,0,122,0.25), inset 0 1px 0 rgba(255,255,255,0.1)',
+                  }}
+                >
+                  Confirm Swap
+                </button>
+              )}
               <button onClick={handleClose} className="h-10 w-full rounded-xl text-[13px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-all">
                 Cancel
               </button>

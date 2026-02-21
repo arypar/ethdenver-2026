@@ -44,6 +44,11 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
     [charts],
   );
 
+  const existingLiquidityPools = useMemo(
+    () => new Set(charts.filter(c => c.config.metric === 'Liquidity').map(c => c.config.pool)),
+    [charts],
+  );
+
   const handleSuggestionSelect = useCallback(async (suggestion: PoolSuggestion) => {
     const pool = suggestion.pool;
 
@@ -196,7 +201,7 @@ export function IntelligenceTab({ chain, charts, onAddChart, onRenameChart, onRe
               <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/50">New Liquidity Pool</span>
             </div>
             <div className="px-5 py-4">
-              <AddPoolForm onAdd={handleAddPool} existingPools={existingPools} />
+              <AddPoolForm onAdd={handleAddPool} existingPools={existingLiquidityPools} />
             </div>
           </div>
         )}

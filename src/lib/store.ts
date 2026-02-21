@@ -151,7 +151,11 @@ export function useSavedCharts(chain: ChainId = 'eth') {
 
   const remove = useCallback((id: string) => {
     setCharts(prev => prev.filter(c => c.id !== id));
-    apiDelete(`/api/charts/${id}`);
+    apiDelete(`/api/charts/${id}`).then(ok => {
+      if (!ok) {
+        console.warn(`[store] Failed to delete chart ${id} from DB — it may reappear on reload`);
+      }
+    });
   }, []);
 
   const appendDataPoint = useCallback((id: string, point: { time: string; value: number; block?: number }) => {
