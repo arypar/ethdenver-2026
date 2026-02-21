@@ -264,7 +264,7 @@ function LiqEventRow({ event, sym0, dec0, sym1, dec1 }: {
 }
 
 function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolName: string }) {
-  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth');
+  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
   const { sym0, dec0, sym1, dec1 } = getPoolTokenInfo(poolName);
 
   const humanTvl0 = formatTokenAmount(tvl.amount0, dec0);

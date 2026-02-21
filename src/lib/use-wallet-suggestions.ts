@@ -9,12 +9,12 @@ import {
   symbolFromAddress,
 } from './tokens';
 
-// V3 NonfungiblePositionManager on Sepolia
-const V3_POSITION_MANAGER: Address = '0x1238536071E1c677A632429e3655c799b22cDA52';
-// V4 PositionManager on Sepolia (official)
-const V4_POSITION_MANAGER: Address = '0x429ba70129df741B2Ca2a85BC3A2a3328e5c09b4';
-// V3 Factory on Sepolia
-const V3_FACTORY: Address = '0x0227628f3F023bb0B980b67D528571c95c6DaC1c';
+// V3 NonfungiblePositionManager on Mainnet
+const V3_POSITION_MANAGER: Address = '0xC36442b4a4522E871399CD717aBDD847Ab11FE88';
+// V4 PositionManager on Mainnet
+const V4_POSITION_MANAGER: Address = '0xbD216513d74C8cf14cf4747E6AaA6420FF64ee9e';
+// V3 Factory on Mainnet
+const V3_FACTORY: Address = '0x1F98431c8aD98523631AE4a59f267346ea31F984';
 
 const MAX_POSITIONS = 20;
 
@@ -89,7 +89,7 @@ export interface PoolSuggestion {
 
 export function useWalletSuggestions() {
   const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient({ chainId: 11155111 });
+  const publicClient = usePublicClient({ chainId: 1 });
 
   const [suggestions, setSuggestions] = useState<PoolSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,7 +104,7 @@ export function useWalletSuggestions() {
 
     scannedRef.current = address;
     setLoading(true);
-    console.log('[WalletSuggestions] scanning', address, 'on Sepolia...');
+    console.log('[WalletSuggestions] scanning', address, 'on Mainnet...');
 
     const lpPools = new Set<string>();
     const results: PoolSuggestion[] = [];

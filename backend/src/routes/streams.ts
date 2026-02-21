@@ -4,6 +4,14 @@ import { broadcastStreamTx, broadcastLiquidityEvent } from '../lib/ws-server.js'
 import { tracker } from '../lib/pool-tracker.js';
 import { monadTracker } from '../lib/monad-tracker.js';
 import { log, logError } from '../lib/log.js';
+import { getCachedPool } from '../lib/pool-cache.js';
+import { createPublicClient, http, erc20Abi, type Address } from 'viem';
+import { mainnet } from 'viem/chains';
+
+const tvlRpc = createPublicClient({
+  chain: mainnet,
+  transport: http(process.env.ETH_RPC_URL || 'https://ethereum-rpc.publicnode.com'),
+});
 
 /*
  * ============================================================
@@ -430,48 +438,83 @@ router.get('/liquidity/events', async (req, res) => {
   res.json({ events: data ?? [], total: count ?? 0 });
 });
 
-// ── GET /liquidity/tvl ── TVL snapshot for a pool
+// ── GET /liquidity/tvl ── on-chain TVL via ERC20 balanceOf on the pool contract
 router.get('/liquidity/tvl', async (req, res) => {
   const chain = (req.query.chain as string) || 'eth';
   const pool = req.query.pool as string | undefined;
+  const poolName = req.query.poolName as string | undefined;
 
-  if (!DB_ENABLED || !supabase || !pool) {
+  if (!pool) {
     res.json({ tvl: { amount0: '0', amount1: '0' }, eventCount: 0 });
     return;
   }
 
-  const { data, error } = await supabase
-    .from('liquidity_events')
-    .select('event_type, amount0, amount1')
-    .eq('chain', chain)
-    .eq('pool_address', pool.toLowerCase())
-    .in('event_type', ['mint', 'burn']);
+  const poolAddr = pool.toLowerCase() as Address;
 
-  if (error) {
-    logError('streams', `TVL query error: ${error.message}`);
-    res.status(500).json({ error: error.message });
-    return;
-  }
+  let token0Addr: Address | undefined;
+  let token1Addr: Address | undefined;
 
-  let tvl0 = BigInt(0);
-  let tvl1 = BigInt(0);
-
-  for (const row of data ?? []) {
-    const a0 = BigInt(row.amount0 || '0');
-    const a1 = BigInt(row.amount1 || '0');
-    if (row.event_type === 'mint') {
-      tvl0 += a0;
-      tvl1 += a1;
-    } else {
-      tvl0 -= a0;
-      tvl1 -= a1;
+  if (poolName) {
+    const cached = getCachedPool(poolName);
+    if (cached) {
+      token0Addr = cached.token0Address;
+      token1Addr = cached.token1Address;
     }
   }
 
-  res.json({
-    tvl: { amount0: tvl0.toString(), amount1: tvl1.toString() },
-    eventCount: data?.length ?? 0,
-  });
+  if (!token0Addr || !token1Addr) {
+    const POOL_ABI = [
+      { inputs: [], name: 'token0', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+      { inputs: [], name: 'token1', outputs: [{ type: 'address' }], stateMutability: 'view', type: 'function' },
+    ] as const;
+    try {
+      const [t0, t1] = await Promise.all([
+        tvlRpc.readContract({ address: poolAddr, abi: POOL_ABI, functionName: 'token0' }),
+        tvlRpc.readContract({ address: poolAddr, abi: POOL_ABI, functionName: 'token1' }),
+      ]);
+      token0Addr = t0 as Address;
+      token1Addr = t1 as Address;
+    } catch (err: any) {
+      logError('streams', `TVL token lookup failed for ${pool}: ${err.message}`);
+      res.json({ tvl: { amount0: '0', amount1: '0' }, eventCount: 0 });
+      return;
+    }
+  }
+
+  try {
+    const [bal0, bal1] = await Promise.all([
+      tvlRpc.readContract({
+        address: token0Addr,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [poolAddr],
+      }),
+      tvlRpc.readContract({
+        address: token1Addr,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [poolAddr],
+      }),
+    ]);
+
+    let eventCount = 0;
+    if (DB_ENABLED && supabase) {
+      const { count } = await supabase
+        .from('liquidity_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('chain', chain)
+        .eq('pool_address', poolAddr);
+      eventCount = count ?? 0;
+    }
+
+    res.json({
+      tvl: { amount0: bal0.toString(), amount1: bal1.toString() },
+      eventCount,
+    });
+  } catch (err: any) {
+    logError('streams', `TVL balance read failed for ${pool}: ${err.message}`);
+    res.json({ tvl: { amount0: '0', amount1: '0' }, eventCount: 0 });
+  }
 });
 
 // ── GET /liquidity/positions ── aggregated positions by owner + tick range

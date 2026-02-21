@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { BarChart3, Shuffle } from 'lucide-react';
 import type { ChartConfig, Metric, Pool, TimeRange, ChartType } from '@/lib/types';
 
-const METRICS: Metric[] = ['Volume', 'TVL', 'Fees', 'Price', 'Liquidity Delta', 'Swap Count'];
+const METRICS: Metric[] = ['Volume', 'Liquidity', 'Fees', 'Price', 'Swap Count'];
 const POOLS: Pool[] = ['WETH/USDC', 'WBTC/ETH', 'UNI/ETH', 'ARB/USDC', 'LINK/ETH', 'MATIC/USDC'];
 const RANGES: TimeRange[] = ['1H', '24H', '7D', '30D'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar'];

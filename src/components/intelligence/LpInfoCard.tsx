@@ -92,9 +92,13 @@ function EventRow({ event }: { event: LiquidityEvent }) {
 export function LpInfoCard({ lpData, onClose }: LpInfoCardProps) {
   const poolAddress = lpData.poolAddress || '';
 
+  const poolName = lpData.token0Symbol && lpData.token1Symbol
+    ? `${lpData.token0Symbol}/${lpData.token1Symbol}`
+    : '';
   const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(
     poolAddress,
     'eth',
+    poolName,
   );
 
   const statCards = [

@@ -58,7 +58,16 @@ export function useLiquidityStream(chain: Chain) {
     fetch(`${API_BASE}/streams/liquidity/events?chain=${chain}&limit=50`)
       .then((r) => r.json())
       .then(({ events: evts }) => {
-        if (Array.isArray(evts) && evts.length > 0) setEvents(evts);
+        if (Array.isArray(evts) && evts.length > 0) {
+          setEvents(evts);
+          const counts = { mints: 0, burns: 0, collects: 0 };
+          for (const e of evts) {
+            if (e.event_type === 'mint') counts.mints++;
+            else if (e.event_type === 'burn') counts.burns++;
+            else counts.collects++;
+          }
+          liqCountRef.current = counts;
+        }
       })
       .catch(() => {});
   }, [chain]);

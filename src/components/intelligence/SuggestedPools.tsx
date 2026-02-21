@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Plus, X, Droplets, Wallet, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { PoolSuggestion } from '@/lib/use-wallet-suggestions';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface SuggestedPoolsProps {
   suggestions: PoolSuggestion[];
@@ -20,23 +22,26 @@ export function SuggestedPools({
   onSelect,
   onRefresh,
 }: SuggestedPoolsProps) {
-  const [dismissed, setDismissed] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    try {
-      const stored = localStorage.getItem('unisignal:dismissed-suggestions');
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/dismissed-suggestions`)
+      .then(r => r.ok ? r.json() : [])
+      .then((pools: string[]) => setDismissed(new Set(pools)))
+      .catch(() => {});
+  }, []);
 
   const dismiss = (pool: string) => {
     setDismissed(prev => {
       const next = new Set(prev);
       next.add(pool);
-      try { localStorage.setItem('unisignal:dismissed-suggestions', JSON.stringify([...next])); } catch {}
       return next;
     });
+    fetch(`${API_BASE}/api/dismissed-suggestions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pool }),
+    }).catch(() => {});
   };
 
   const visible = suggestions.filter(s => !dismissed.has(s.pool));

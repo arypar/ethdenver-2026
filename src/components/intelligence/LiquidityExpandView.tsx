@@ -75,7 +75,7 @@ export function LiquidityExpandView({ chart, open, onClose }: LiquidityExpandVie
   const poolName = chart?.config.pool ?? '';
   const { sym0, dec0, sym1, dec1 } = getTokenInfo(poolName);
 
-  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth');
+  const { events, tvl, stats, loading, wsConnected } = usePoolLiquidityMonitor(poolAddress, 'eth', poolName);
 
   const filteredEvents = useMemo(
     () => filter === 'all' ? events : events.filter(e => e.event_type === filter),

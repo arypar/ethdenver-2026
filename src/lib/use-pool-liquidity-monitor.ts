@@ -42,7 +42,7 @@ function computeStats(events: LiquidityEvent[]): PoolLiquidityStats {
   return s;
 }
 
-export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'eth') {
+export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'eth', poolName?: string) {
   const [events, setEvents] = useState<LiquidityEvent[]>([]);
   const [tvl, setTvl] = useState<TVLData>({ amount0: '0', amount1: '0' });
   const [stats, setStats] = useState<PoolLiquidityStats>({ mints: 0, burns: 0, collects: 0 });
@@ -50,12 +50,14 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
   const [wsConnected, setWsConnected] = useState(false);
 
   const poolRef = useRef(poolAddress);
+  const poolNameRef = useRef(poolName);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttempt = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { poolRef.current = poolAddress; }, [poolAddress]);
+  useEffect(() => { poolNameRef.current = poolName; }, [poolName]);
 
   const fetchEvents = useCallback(async () => {
     if (!poolRef.current) return;
@@ -76,10 +78,11 @@ export function usePoolLiquidityMonitor(poolAddress: string, _chain: string = 'e
   const fetchTvl = useCallback(async () => {
     if (!poolRef.current) return;
     const pool = poolRef.current.toLowerCase();
+    const name = poolNameRef.current;
     try {
-      const res = await fetch(
-        `${API_BASE}/streams/liquidity/tvl?chain=eth&pool=${pool}`,
-      );
+      let url = `${API_BASE}/streams/liquidity/tvl?chain=eth&pool=${pool}`;
+      if (name) url += `&poolName=${encodeURIComponent(name)}`;
+      const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
       if (data.tvl) setTvl(data.tvl);
