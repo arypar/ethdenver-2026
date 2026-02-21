@@ -1,5 +1,5 @@
 export type ChainId = 'eth' | 'monad';
-export type Metric = 'Price' | 'Volume' | 'Fees' | 'Swap Count' | 'Liquidity';
+export type Metric = 'Price' | 'Volume' | 'TVL' | 'Fees' | 'Swap Count' | 'Liquidity' | 'Liquidity Delta';
 export type Pool = string;
 export type TimeRange = '1H' | '24H' | '7D' | '30D';
 export type ChartType = 'line' | 'area' | 'bar';
@@ -28,8 +28,8 @@ export interface ChartDataPoint {
   block?: number;
 }
 
-export type TriggerType = 'Swap';
-export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Swap Direction' | 'Count in Window';
+export type TriggerType = 'Swap' | 'Liquidity Added' | 'Liquidity Removed';
+export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Liquidity Change %' | 'Swap Direction' | 'Count in Window';
 export type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
 export type WindowSize = '1m' | '5m' | '15m' | '1h';
 export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap' | 'Add Liquidity' | 'Remove Liquidity';
@@ -49,6 +49,7 @@ export interface RuleAction {
     channel?: string;
     token?: string;
     percent?: number;
+    amount?: string;
     message?: string;
   };
 }

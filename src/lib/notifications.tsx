@@ -92,9 +92,6 @@ export function useNotificationSync(actions: ActionItem[]) {
       if (seenIds.current.has(action.id)) continue;
       seenIds.current.add(action.id);
 
-      const isAlert = action.details?.actionTypes?.includes('Create Alert');
-      if (!isAlert) continue;
-
       addNotification({
         id: action.id,
         ruleName: action.ruleName,

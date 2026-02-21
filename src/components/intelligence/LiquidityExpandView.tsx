@@ -31,7 +31,9 @@ function getTokenInfo(poolName: string) {
 function fmtAmount(raw: string, decimals: number): string {
   const n = Number(raw) / 10 ** decimals;
   if (n === 0) return '0';
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
   if (Math.abs(n) >= 1) return n.toFixed(4);
   if (Math.abs(n) >= 0.0001) return n.toFixed(6);

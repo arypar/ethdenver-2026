@@ -18,7 +18,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import type { ChartConfig, ChartDataPoint } from '@/lib/types';
-import { formatValue, getChartStats } from '@/lib/mock-data';
+import { formatValue, getChartStats } from '@/lib/pool-data';
 
 interface ChartCanvasProps {
   config: ChartConfig;

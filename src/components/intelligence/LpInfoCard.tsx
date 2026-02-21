@@ -3,7 +3,7 @@
 import { X, Droplets, TrendingUp, TrendingDown, Wallet, ExternalLink } from 'lucide-react';
 import { usePoolLiquidityMonitor } from '@/lib/use-pool-liquidity-monitor';
 import type { LpPositionData } from '@/lib/use-wallet-suggestions';
-import type { LiquidityEvent } from '@/lib/use-liquidity-stream';
+import type { LiquidityEvent } from '@/lib/use-pool-liquidity-monitor';
 
 interface LpInfoCardProps {
   lpData: LpPositionData;

@@ -204,7 +204,9 @@ function liqTimeAgo(iso: string): string {
 function formatTokenAmount(raw: string, decimals: number): string {
   const n = Number(raw) / 10 ** decimals;
   if (n === 0) return '0';
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
+  if (Math.abs(n) >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
   if (Math.abs(n) >= 1) return n.toFixed(2);
   if (Math.abs(n) >= 0.0001) return n.toFixed(4);
@@ -287,13 +289,13 @@ function LiquidityFeed({ poolAddress, poolName }: { poolAddress: string; poolNam
           <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">Fee Collects</div>
           <div className="text-[15px] font-semibold tabular-nums text-amber-400">{stats.collects}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym0} TVL</div>
-          <div className="text-[14px] font-semibold tabular-nums text-white/70">{humanTvl0}</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{humanTvl0}</div>
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="text-[9px] font-medium uppercase tracking-wider text-white/25 mb-0.5">{sym1} TVL</div>
-          <div className="text-[14px] font-semibold tabular-nums text-white/70">{humanTvl1}</div>
+          <div className="text-[14px] font-semibold tabular-nums text-white/70 truncate">{humanTvl1}</div>
         </div>
       </div>
 

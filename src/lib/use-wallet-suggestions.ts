@@ -75,6 +75,15 @@ const v3FactoryAbi = [
   },
 ] as const;
 
+export interface LpPositionData {
+  poolAddress?: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  version: 'v3' | 'v4';
+  feeTier: number;
+  tokenId: string;
+}
+
 export interface PoolSuggestion {
   pool: string;
   reason: 'lp' | 'holding';
