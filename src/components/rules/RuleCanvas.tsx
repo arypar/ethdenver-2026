@@ -9,6 +9,7 @@ import { RuleBlock } from './RuleBlock';
 import { cn } from '@/lib/utils';
 import { MousePointerClick, Sparkles } from 'lucide-react';
 import type { CanvasBlock, BlockCategory } from './block-types';
+import type { ConditionLogic } from '@/lib/types';
 
 interface RuleCanvasProps {
   name: string;
@@ -18,6 +19,8 @@ interface RuleCanvasProps {
   onRemoveBlock: (id: string) => void;
   onActivate: () => void;
   canActivate: boolean;
+  conditionLogic: ConditionLogic;
+  onConditionLogicChange: (logic: ConditionLogic) => void;
 }
 
 const ENERGY_COLORS: Record<BlockCategory, { solid: string; rgb: string }> = {
@@ -41,7 +44,7 @@ interface FlowLine {
   toCategory: BlockCategory;
 }
 
-export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemoveBlock, onActivate, canActivate }: RuleCanvasProps) {
+export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemoveBlock, onActivate, canActivate, conditionLogic, onConditionLogicChange }: RuleCanvasProps) {
   const { setNodeRef, isOver } = useDroppable({ id: 'canvas' });
 
   const triggers = blocks.filter(b => b.category === 'trigger');
@@ -49,8 +52,12 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
   const actions = blocks.filter(b => b.category === 'action');
   const hasBlocks = blocks.length > 0;
 
-  const poolName = triggers[0] ? String(triggers[0].config.pool || '') : '';
-  const poolTokens = poolName.includes('/') ? poolName.split('/') : [];
+  const trigger = triggers[0];
+  const triggerChain = trigger ? String(trigger.config.chain || 'eth') : '';
+  const poolName = trigger ? String(trigger.config.pool || '') : '';
+  const poolTokens = triggerChain === 'monad'
+    ? (trigger?.config.tokenSymbol ? [String(trigger.config.tokenSymbol), 'MON'] : [])
+    : (poolName.includes('/') ? poolName.split('/') : []);
 
   const gridRef = useRef<HTMLDivElement>(null);
   const [flowLines, setFlowLines] = useState<FlowLine[]>([]);
@@ -78,6 +85,24 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
       });
     };
 
+    const stepPath = (sx: number, sy: number, ex: number, ey: number) => {
+      const dy = ey - sy;
+      if (Math.abs(dy) < 1 || ex <= sx) return `M ${sx} ${sy} L ${ex} ${ey}`;
+      const midX = (sx + ex) / 2;
+      const maxR = 10;
+      const r = Math.max(0, Math.min(maxR, Math.abs(dy) / 2, midX - sx, ex - midX));
+      if (r < 1) return `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ey} L ${ex} ${ey}`;
+      const sign = dy > 0 ? 1 : -1;
+      return [
+        `M ${sx} ${sy}`,
+        `L ${midX - r} ${sy}`,
+        `Q ${midX} ${sy} ${midX} ${sy + sign * r}`,
+        `L ${midX} ${ey - sign * r}`,
+        `Q ${midX} ${ey} ${midX + r} ${ey}`,
+        `L ${ex} ${ey}`,
+      ].join(' ');
+    };
+
     const tPos = getPositions('trigger');
     const cPos = getPositions('condition');
     const aPos = getPositions('action');
@@ -93,10 +118,9 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
 
       cPos.forEach(c => {
         const ex = c.left - 2;
-        const midX = (sx + ex) / 2;
         newLines.push({
           id: `tc-${idx++}`,
-          d: `M ${sx} ${t.centerY} C ${midX} ${t.centerY}, ${midX} ${c.centerY}, ${ex} ${c.centerY}`,
+          d: stepPath(sx, t.centerY, ex, c.centerY),
           from: { x: sx, y: t.centerY },
           to: { x: ex, y: c.centerY },
           fromCategory: 'trigger',
@@ -119,10 +143,9 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
 
         aPos.forEach(a => {
           const ex = a.left - 2;
-          const midX = (sx + ex) / 2;
           newLines.push({
             id: `sa-${idx++}`,
-            d: `M ${sx} ${s.centerY} C ${midX} ${s.centerY}, ${midX} ${a.centerY}, ${ex} ${a.centerY}`,
+            d: stepPath(sx, s.centerY, ex, a.centerY),
             from: { x: sx, y: s.centerY },
             to: { x: ex, y: a.centerY },
             fromCategory: s.cat,
@@ -146,12 +169,18 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
   }, [blocks]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(measure);
-    const observer = new ResizeObserver(() => requestAnimationFrame(measure));
-    if (gridRef.current) observer.observe(gridRef.current);
+    const raf = () => requestAnimationFrame(measure);
+    const frame = raf();
+    const ro = new ResizeObserver(raf);
+    const mo = new MutationObserver(raf);
+    if (gridRef.current) {
+      ro.observe(gridRef.current);
+      mo.observe(gridRef.current, { childList: true, subtree: true, attributes: true });
+    }
     return () => {
       cancelAnimationFrame(frame);
-      observer.disconnect();
+      ro.disconnect();
+      mo.disconnect();
     };
   }, [measure]);
 
@@ -208,6 +237,8 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
                       blocks={conditions}
                       onUpdate={onUpdateBlock}
                       onRemove={onRemoveBlock}
+                      conditionLogic={conditionLogic}
+                      onConditionLogicChange={onConditionLogicChange}
                     />
                   </SortableContext>
                   <SortableContext items={actions.map(b => b.id)} strategy={verticalListSortingStrategy}>
@@ -255,16 +286,19 @@ export function RuleCanvas({ name, onNameChange, blocks, onUpdateBlock, onRemove
 
 /* ── Column ── */
 
-function BlockColumn({ category, blocks, onUpdate, onRemove, poolTokens }: {
+function BlockColumn({ category, blocks, onUpdate, onRemove, poolTokens, conditionLogic, onConditionLogicChange }: {
   category: BlockCategory;
   blocks: CanvasBlock[];
   onUpdate: (id: string, config: Record<string, string | number>) => void;
   onRemove: (id: string) => void;
   poolTokens?: string[];
+  conditionLogic?: ConditionLogic;
+  onConditionLogicChange?: (logic: ConditionLogic) => void;
 }) {
   const energy = ENERGY_COLORS[category];
   const section = SECTION_CONFIG[category];
   const populated = blocks.length > 0;
+  const showLogicToggle = category === 'condition' && blocks.length >= 2 && onConditionLogicChange;
 
   return (
     <div className="flex flex-col gap-2 min-w-0">
@@ -299,14 +333,21 @@ function BlockColumn({ category, blocks, onUpdate, onRemove, poolTokens }: {
 
       {populated ? (
         <div className="flex flex-col gap-2">
-          {blocks.map(block => (
-            <RuleBlock
-              key={block.id}
-              block={block}
-              onUpdate={onUpdate}
-              onRemove={onRemove}
-              poolTokens={poolTokens}
-            />
+          {blocks.map((block, i) => (
+            <div key={block.id} className="flex flex-col gap-2">
+              {i > 0 && showLogicToggle && (
+                <LogicToggle
+                  logic={conditionLogic || 'AND'}
+                  onChange={onConditionLogicChange}
+                />
+              )}
+              <RuleBlock
+                block={block}
+                onUpdate={onUpdate}
+                onRemove={onRemove}
+                poolTokens={poolTokens}
+              />
+            </div>
           ))}
         </div>
       ) : (
@@ -314,6 +355,37 @@ function BlockColumn({ category, blocks, onUpdate, onRemove, poolTokens }: {
           <span className="text-[11px] text-white/15 text-center">{section.emptyHint}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function LogicToggle({ logic, onChange }: { logic: ConditionLogic; onChange: (logic: ConditionLogic) => void }) {
+  return (
+    <div className="flex items-center justify-center py-0.5">
+      <div className="flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5">
+        <button
+          onClick={() => onChange('AND')}
+          className={cn(
+            'px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider transition-all',
+            logic === 'AND'
+              ? 'bg-indigo-500/20 text-indigo-300 shadow-sm'
+              : 'text-white/25 hover:text-white/40'
+          )}
+        >
+          AND
+        </button>
+        <button
+          onClick={() => onChange('OR')}
+          className={cn(
+            'px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider transition-all',
+            logic === 'OR'
+              ? 'bg-indigo-500/20 text-indigo-300 shadow-sm'
+              : 'text-white/25 hover:text-white/40'
+          )}
+        >
+          OR
+        </button>
+      </div>
     </div>
   );
 }

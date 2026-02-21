@@ -13,7 +13,7 @@ import type { ChainId, ChartConfig, Metric, TimeRange, ChartType } from '@/lib/t
 
 const ETH_METRICS: Metric[] = ['Price', 'Volume', 'Fees', 'Swap Count'];
 const MONAD_METRICS: Metric[] = ['Price', 'Volume', 'Swap Count'];
-const RANGES: TimeRange[] = ['1H', '24H', '7D', '30D'];
+const RANGES: TimeRange[] = ['1H', '24H', '7D'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar'];
 
 interface ChartFormProps {

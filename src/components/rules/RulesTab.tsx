@@ -14,7 +14,7 @@ import {
   PALETTE_ITEMS, createDefaultConfig, getBlockError,
   type CanvasBlock, type PaletteItem, type BlockCategory,
 } from './block-types';
-import type { ChainId, Rule, TriggerType, Pool, ConditionField, ConditionOperator, ActionType } from '@/lib/types';
+import type { ChainId, Rule, TriggerType, Pool, ConditionField, ConditionOperator, ActionType, ConditionLogic, WindowSize } from '@/lib/types';
 
 interface RulesTabProps {
   connected: boolean;
@@ -33,6 +33,7 @@ export function RulesTab({
 }: RulesTabProps) {
   const [name, setName] = useState('');
   const [blocks, setBlocks] = useState<CanvasBlock[]>([]);
+  const [conditionLogic, setConditionLogic] = useState<ConditionLogic>('AND');
   const [activeDrag, setActiveDrag] = useState<{ category: BlockCategory; type: string } | null>(null);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
@@ -103,7 +104,7 @@ export function RulesTab({
 
   const handleActivate = () => {
     if (!connected) { onConnectRequired(); return; }
-    const rule = convertBlocksToRule(name, blocks, editingRuleId);
+    const rule = convertBlocksToRule(name, blocks, editingRuleId, conditionLogic);
     if (editingRuleId) {
       onUpdateRule(rule.id, rule);
       setEditingRuleId(null);
@@ -112,11 +113,13 @@ export function RulesTab({
     }
     setName('');
     setBlocks([]);
+    setConditionLogic('AND');
   };
 
   const handleEdit = (rule: Rule) => {
     setEditingRuleId(rule.id);
     setName(rule.name);
+    setConditionLogic(rule.conditionLogic || 'AND');
     setBlocks(convertRuleToBlocks(rule));
   };
 
@@ -135,7 +138,7 @@ export function RulesTab({
           <div className="lg:sticky lg:top-[80px] lg:self-start">
             <BlockPalette onClickAdd={addBlock} />
           </div>
-          <RuleCanvas name={name} onNameChange={setName} blocks={blocks} onUpdateBlock={updateBlock} onRemoveBlock={removeBlock} onActivate={handleActivate} canActivate={hasTriggersAndActions && allBlocksValid} />
+          <RuleCanvas name={name} onNameChange={setName} blocks={blocks} onUpdateBlock={updateBlock} onRemoveBlock={removeBlock} onActivate={handleActivate} canActivate={hasTriggersAndActions && allBlocksValid} conditionLogic={conditionLogic} onConditionLogicChange={setConditionLogic} />
         </div>
 
         <ActiveRulesList rules={rules} onToggle={(id, enabled) => onUpdateRule(id, { enabled })} onEdit={handleEdit} onDuplicate={onDuplicateRule} onDelete={onRemoveRule} onSimulate={onSimulateTrigger} />
@@ -154,7 +157,7 @@ function categoryOrder(cat: BlockCategory): number {
   return 2;
 }
 
-function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: string | null): Rule {
+function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: string | null, conditionLogic: ConditionLogic): Rule {
   const triggers = blocks.filter(b => b.category === 'trigger');
   const conditions = blocks.filter(b => b.category === 'condition');
   const actions = blocks.filter(b => b.category === 'action');
@@ -169,9 +172,13 @@ function convertBlocksToRule(name: string, blocks: CanvasBlock[], existingId: st
       chain: (String(t?.config.chain) || 'eth') as ChainId,
     },
     conditions: conditions.map(c => ({
-      id: c.id, field: c.type as ConditionField, operator: (String(c.config.operator) || '>') as ConditionOperator,
+      id: c.id,
+      field: c.type as ConditionField,
+      operator: (String(c.config.operator) || '>') as ConditionOperator,
       value: String(c.config.value || ''),
+      ...(c.config.window ? { window: String(c.config.window) as WindowSize } : {}),
     })),
+    conditionLogic,
     actions: actions.map(a => ({
       id: a.id, type: a.type as ActionType,
       config: Object.fromEntries(Object.entries(a.config).map(([k, v]) => [k, typeof v === 'number' ? v : String(v)])),

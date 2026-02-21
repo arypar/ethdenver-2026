@@ -37,7 +37,7 @@ create table user_charts (
   user_id uuid not null references auth.users(id) on delete cascade,
   pool_name text not null references tracked_pools(name) on delete cascade,
   metric text not null check (metric in ('Price', 'Volume', 'Fees', 'Swap Count')),
-  time_range text not null check (time_range in ('1H', '24H', '7D', '30D')),
+  time_range text not null check (time_range in ('1H', '24H', '7D')),
   title text,
   position smallint not null default 0,
   created_at timestamptz not null default now()

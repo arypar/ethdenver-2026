@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { monadTracker, type MonadSwapRecord } from '../lib/monad-tracker.js';
+import { monadTracker, dbQueryMonadSwaps, type MonadSwapRecord } from '../lib/monad-tracker.js';
 import { resolveToken } from '../lib/nadfun-api.js';
 import { getMonUsdPrice } from '../lib/mon-price.js';
+import { DB_ENABLED } from '../lib/supabase.js';
 import { log, logError } from '../lib/log.js';
 
 const router = Router();
@@ -9,7 +10,7 @@ const router = Router();
 const SECS_PER_BLOCK = 1;
 
 type Metric = 'Price' | 'Volume' | 'Swap Count' | 'Fees';
-type TimeRange = '1H' | '24H' | '7D' | '30D';
+type TimeRange = '1H' | '24H' | '7D';
 
 interface RangeConfig {
   buckets: number;
@@ -21,7 +22,6 @@ const RANGE_CONFIG: Record<TimeRange, RangeConfig> = {
   '1H':  { buckets: 60,  blocksBack: 3_600,      blocksPerBucket: 60 },
   '24H': { buckets: 96,  blocksBack: 86_400,     blocksPerBucket: 900 },
   '7D':  { buckets: 84,  blocksBack: 604_800,    blocksPerBucket: 7_200 },
-  '30D': { buckets: 60,  blocksBack: 2_592_000,  blocksPerBucket: 43_200 },
 };
 
 function formatTimeLabel(msAgo: number): string {
@@ -121,9 +121,12 @@ router.post('/chart-data', async (req, res) => {
 
     const backfilling = monadTracker.isBackfilling(addr);
 
-    // Serve whatever data is available (grows incrementally during backfill)
+    // Serve whatever data is available — try in-memory first, then DB
     const sinceMs = Date.now() - config.blocksBack * SECS_PER_BLOCK * 1000;
-    const swaps = monadTracker.getSwaps(addr, sinceMs);
+    let swaps = monadTracker.getSwaps(addr, sinceMs);
+    if (swaps.length === 0 && DB_ENABLED) {
+      swaps = await dbQueryMonadSwaps(addr, sinceMs);
+    }
     log('monad-chart', `${addr.slice(0, 10)} ${metric} ${range} — ${swaps.length} swaps (backfilling: ${backfilling})`);
 
     if (swaps.length === 0) {

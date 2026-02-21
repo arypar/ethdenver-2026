@@ -20,6 +20,7 @@ router.get('/rules', async (_req, res) => {
     enabled: row.enabled,
     trigger: { type: 'Swap', pool: row.pool, chain: row.chain || 'eth' },
     conditions: row.conditions,
+    conditionLogic: row.condition_logic || 'AND',
     actions: row.actions,
     createdAt: new Date(row.created_at).getTime(),
   }));
@@ -39,7 +40,7 @@ router.get('/rules', async (_req, res) => {
 router.post('/rules', async (req, res) => {
   if (!DB_ENABLED || !supabase) { res.status(503).json({ error: 'DB not configured' }); return; }
 
-  const { id, name, enabled, trigger, conditions, actions } = req.body;
+  const { id, name, enabled, trigger, conditions, conditionLogic, actions } = req.body;
   if (!trigger?.pool) { res.status(400).json({ error: 'Missing pool' }); return; }
 
   const { error } = await supabase.from('rules').upsert({
@@ -49,6 +50,7 @@ router.post('/rules', async (req, res) => {
     pool: trigger.pool,
     chain: trigger.chain || 'eth',
     conditions: conditions || [],
+    condition_logic: conditionLogic || 'AND',
     actions: actions || [],
   }, { onConflict: 'id' });
 
@@ -71,6 +73,7 @@ router.patch('/rules/:id', async (req, res) => {
   if (req.body.trigger?.pool !== undefined) updates.pool = req.body.trigger.pool;
   if (req.body.trigger?.chain !== undefined) updates.chain = req.body.trigger.chain;
   if (req.body.conditions !== undefined) updates.conditions = req.body.conditions;
+  if (req.body.conditionLogic !== undefined) updates.condition_logic = req.body.conditionLogic;
   if (req.body.actions !== undefined) updates.actions = req.body.actions;
 
   if (Object.keys(updates).length === 0) { res.status(400).json({ error: 'Nothing to update' }); return; }

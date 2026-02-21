@@ -166,13 +166,20 @@ class MonadTokenTracker extends EventEmitter {
       const { data } = await supabase.from('monad_tracked_tokens').select('*');
       for (const row of data ?? []) {
         const addr = row.token_address.toLowerCase();
+        const label = row.symbol || addr.slice(0, 10);
+
+        const dbSwaps = await dbQueryMonadSwaps(addr, Date.now() - MAX_AGE_MS);
+        const estimatedBlocks = dbSwaps.length > 0
+          ? Math.round((Date.now() - dbSwaps[0].timestamp) / (SECS_PER_BLOCK * 1000))
+          : 0;
+
         this.tokens.set(addr, {
           meta: { name: row.name, symbol: row.symbol, image_url: row.image_url, graduated: false, creator: '' },
-          swaps: [],
-          backfillBlocks: 0,
+          swaps: dbSwaps,
+          backfillBlocks: estimatedBlocks,
           backfilling: false,
         });
-        log('monad-tracker', `Loaded tracked token: ${row.symbol || row.token_address}`);
+        log('monad-tracker', `Loaded tracked token: ${label} — ${dbSwaps.length} swaps from DB`);
         resolveToken(addr).then(meta => {
           const state = this.tokens.get(addr);
           if (state && meta) {
@@ -303,8 +310,21 @@ class MonadTokenTracker extends EventEmitter {
       const now = Date.now();
       const label = state.meta?.symbol || addr.slice(0, 10);
       const sinceTs = Math.floor((now - blocksBack * SECS_PER_BLOCK * 1000) / 1000);
+      const sinceMs = sinceTs * 1000;
 
-      // Try nad.fun API first — much faster than scanning 86K+ blocks on-chain
+      // Try loading from DB first — avoids re-scanning entirely
+      if (DB_ENABLED && supabase) {
+        const dbSwaps = await dbQueryMonadSwaps(addr, sinceMs);
+        if (dbSwaps.length > 0) {
+          state.swaps = dbSwaps;
+          state.backfillBlocks = blocksBack;
+          const totalVol = dbSwaps.reduce((s, sw) => s + sw.volumeMON, 0);
+          log('monad-tracker', `Backfilled ${label} from DB: ${dbSwaps.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+          return;
+        }
+      }
+
+      // Try nad.fun API next — much faster than scanning 86K+ blocks on-chain
       log('monad-tracker', `Backfilling ${label} — trying nad.fun API first...`);
       const apiSwaps = await getSwapHistorySince(addr, sinceTs);
       if (apiSwaps.length > 0) {

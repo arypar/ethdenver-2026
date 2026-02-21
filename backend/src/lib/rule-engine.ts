@@ -33,6 +33,7 @@ interface DbRule {
   enabled: boolean;
   pool: string;
   chain: string;
+  conditionLogic: 'AND' | 'OR';
   conditions: RuleCondition[];
   actions: RuleAction[];
 }
@@ -110,12 +111,23 @@ function evaluateCondition(
       return { met, description: `Swap Direction: ${actual} (wanted ${direction})` };
     }
 
-    case 'Count in Window': {
+    case 'Count in Window':
+    case 'Swap Count': {
       const windowMs = WINDOW_MS[condition.window || '5m'];
       const cutoff = swap.timestamp - windowMs;
       const count = recent.filter(s => s.timestamp >= cutoff).length + 1;
       const met = compare(count, condition.operator, threshold);
-      return { met, description: `Count in ${condition.window || '5m'}: ${count} swaps ${condition.operator} ${threshold}` };
+      return { met, description: `Swap Count in ${condition.window || '5m'}: ${count} ${condition.operator} ${threshold}` };
+    }
+
+    case 'Volume': {
+      const windowMs = WINDOW_MS[condition.window || '5m'];
+      const cutoff = swap.timestamp - windowMs;
+      const total = recent
+        .filter(s => s.timestamp >= cutoff)
+        .reduce((sum, s) => sum + s.volumeUSD, 0) + swap.volumeUSD;
+      const met = compare(total, condition.operator, threshold);
+      return { met, description: `Volume in ${condition.window || '5m'}: ${formatUSD(total)} ${condition.operator} ${formatUSD(threshold)}` };
     }
 
     default:
@@ -141,6 +153,7 @@ async function loadEnabledRules(): Promise<DbRule[]> {
     enabled: r.enabled,
     pool: r.pool,
     chain: r.chain || 'eth',
+    conditionLogic: (r.condition_logic || 'AND') as 'AND' | 'OR',
     conditions: r.conditions as RuleCondition[],
     actions: r.actions as RuleAction[],
   }));
@@ -202,7 +215,8 @@ async function logActiveRules() {
   const pools = [...new Set(rules.map(r => r.pool))];
   log('rule-engine', `Active rules: ${rules.length} enabled across ${pools.length} pool(s) [${pools.join(', ')}]`);
   for (const rule of rules) {
-    const condStr = rule.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(' AND ') || 'no conditions';
+    const joiner = ` ${rule.conditionLogic || 'AND'} `;
+    const condStr = rule.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(joiner) || 'no conditions';
     const actStr = rule.actions.map(a => a.type).join(', ') || 'no actions';
     const cd = cooldowns.get(rule.id);
     const cdStr = cd ? ` | cooldown ${Math.max(0, Math.round((COOLDOWN_MS - (Date.now() - cd)) / 1000))}s` : '';
@@ -234,14 +248,16 @@ export function startRuleEngine() {
       }
 
       const results = rule.conditions.map(c => evaluateCondition(c, swap, recent));
-      const allMet = results.length === 0 || results.every(r => r.met);
+      const logic = rule.conditionLogic || 'AND';
+      const passed = results.length === 0
+        || (logic === 'AND' ? results.every(r => r.met) : results.some(r => r.met));
 
       for (const r of results) {
         log('rule-engine', `  "${rule.name}" condition: ${r.description} → ${r.met ? 'PASS' : 'FAIL'}`);
       }
 
-      if (!allMet) {
-        log('rule-engine', `  "${rule.name}" — not triggered (${results.filter(r => !r.met).length}/${results.length} conditions failed)`);
+      if (!passed) {
+        log('rule-engine', `  "${rule.name}" — not triggered [${logic}] (${results.filter(r => !r.met).length}/${results.length} conditions failed)`);
         continue;
       }
 

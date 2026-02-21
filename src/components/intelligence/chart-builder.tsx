@@ -8,7 +8,7 @@ import type { Metric, Pool, TimeRange, ChartType, ChartConfig } from '@/lib/type
 
 const METRICS: Metric[] = ['Volume', 'TVL', 'Fees', 'Price', 'Liquidity Delta', 'Swap Count'];
 const POOLS: Pool[] = ['WETH/USDC', 'WBTC/ETH', 'UNI/ETH', 'ARB/USDC', 'LINK/ETH', 'MATIC/USDC'];
-const RANGES: TimeRange[] = ['1H', '24H', '7D', '30D'];
+const RANGES: TimeRange[] = ['1H', '24H', '7D'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar'];
 
 interface ChartBuilderProps {

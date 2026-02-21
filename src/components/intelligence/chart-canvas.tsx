@@ -15,7 +15,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  CartesianGrid,
 } from 'recharts';
 import type { ChartConfig, ChartDataPoint } from '@/lib/types';
 import { formatValue, getChartStats } from '@/lib/pool-data';
@@ -67,7 +66,6 @@ export function ChartCanvas({ config, data, onSave }: ChartCanvasProps) {
     if (config.chartType === 'bar') {
       return (
         <BarChart {...commonProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis {...axisProps.xAxis} />
           <YAxis {...axisProps.yAxis} />
           <Tooltip content={<ChartTooltipContent metric={config.metric} />} />
@@ -84,7 +82,6 @@ export function ChartCanvas({ config, data, onSave }: ChartCanvasProps) {
     if (config.chartType === 'line') {
       return (
         <LineChart {...commonProps}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
           <XAxis {...axisProps.xAxis} />
           <YAxis {...axisProps.yAxis} />
           <Tooltip content={<ChartTooltipContent metric={config.metric} />} />

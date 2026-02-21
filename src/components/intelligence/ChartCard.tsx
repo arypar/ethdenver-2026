@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Pencil, Trash2, Check, TrendingUp, TrendingDown, Maximize2, Droplets, Wallet, ExternalLink } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area, LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, Tooltip, CartesianGrid, ReferenceDot,
+  XAxis, YAxis, Tooltip, ReferenceDot,
 } from 'recharts';
 import type { SavedChart, ChartConfig, ChartDataPoint } from '@/lib/types';
-import { formatValue, formatAxisTick, formatBlockFull, getChartStats, getYDomain } from '@/lib/pool-data';
+import { formatValue, formatAxisTick, getChartStats, getYDomain } from '@/lib/pool-data';
 import { usePoolLiquidityMonitor, type LiquidityEvent } from '@/lib/use-pool-liquidity-monitor';
 import { TOKENS } from '@/lib/tokens';
 
@@ -20,34 +20,25 @@ interface ChartCardProps {
   onExpand: (chart: SavedChart) => void;
 }
 
-function ChartTooltip({ active, payload, metric, range, chain }: { active?: boolean; payload?: Array<{ value: number; payload: ChartDataPoint }>; metric: string; range?: string; chain?: string }) {
-  if (!active || !payload?.[0]) return null;
-  const point = payload[0].payload;
-  const showPrice = metric !== 'Price' && point.price != null && point.price > 0;
-  const interval = range ? BUCKET_DURATION[range] : undefined;
-  const metricLabel = metric === 'Swap Count' ? 'Swaps' : metric;
-  const chainId = (chain || 'eth') as ChartConfig['chain'];
-  return (
-    <div className="rounded-lg border border-white/[0.1] bg-black/80 px-3 py-2 backdrop-blur-xl shadow-xl">
-      {point.block && (
-        <p className="text-[10px] text-white/30 mb-0.5 font-mono">Block {formatBlockFull(point.block)}</p>
-      )}
-      <p className="text-[10px] text-white/40 mb-0.5">{point.time}{interval ? ` (${interval} bucket)` : ''}</p>
-      <p className="text-[14px] font-bold text-white">
-        {metricLabel}: {formatValue(payload[0].value, metric as ChartConfig['metric'], chainId)}
-      </p>
-      {showPrice && (
-        <p className="text-[11px] text-white/50 mt-0.5">Price: {formatValue(point.price!, 'Price', chainId)}</p>
-      )}
-    </div>
-  );
+function HoverReporter({ active, payload, onHover }: {
+  active?: boolean;
+  payload?: Array<{ value: number; payload: ChartDataPoint }>;
+  onHover: (value: number | null, time: string | null) => void;
+}) {
+  const prev = useRef<number | null>(null);
+  const val = active && payload?.[0] ? payload[0].value : null;
+  const time = active && payload?.[0] ? payload[0].payload.time : null;
+  if (val !== prev.current) {
+    prev.current = val;
+    onHover(val, time);
+  }
+  return null;
 }
 
 const BUCKET_DURATION: Record<string, string> = {
   '1H': '~1 min',
   '24H': '~15 min',
   '7D': '~2 hr',
-  '30D': '~12 hr',
 };
 
 function getChartDescription(metric: string, range: string): string {
@@ -81,9 +72,18 @@ function LiveDot(props: any) {
   );
 }
 
-export function RenderChart({ config, data, chartId, height }: { config: ChartConfig; data: SavedChart['data']; chartId: string; height?: string }) {
+export function RenderChart({ config, data, chartId, height, onHoverValue }: {
+  config: ChartConfig; data: SavedChart['data']; chartId: string; height?: string;
+  onHoverValue?: (value: number | null, time: string | null) => void;
+}) {
   const domain = getYDomain(data, config.metric);
   const lastPoint = data.length > 0 ? data[data.length - 1] : null;
+
+  const noopHover = useCallback((_v: number | null, _t: string | null) => {}, []);
+  const hoverCb = onHoverValue ?? noopHover;
+
+  const tooltipEl = <HoverReporter onHover={hoverCb} />;
+  const cursorStyle = { stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1, strokeDasharray: '4 3' };
 
   const xAxis = {
     dataKey: 'time' as const,
@@ -103,28 +103,27 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
     allowDataOverflow: true,
   };
 
-  const grid = { strokeDasharray: '3 3' as const, stroke: 'rgba(255,255,255,0.04)' };
   const margin = { top: 12, right: 12, left: 0, bottom: 0 };
+
+  const handleMouseLeave = () => hoverCb(null, null);
 
   const inner = () => {
     if (config.chartType === 'bar') {
       return (
-        <BarChart data={data} margin={margin}>
-          <CartesianGrid {...grid} />
+        <BarChart data={data} margin={margin} onMouseLeave={handleMouseLeave}>
           <XAxis {...xAxis} />
           <YAxis {...yAxis} />
-          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+          <Tooltip content={tooltipEl} cursor={{ fill: 'rgba(255,255,255,0.03)' }} isAnimationActive={false} />
           <Bar dataKey="value" fill="#FF007A" opacity={0.85} radius={[3, 3, 0, 0]} animationDuration={300} />
         </BarChart>
       );
     }
     if (config.chartType === 'line') {
       return (
-        <LineChart data={data} margin={margin}>
-          <CartesianGrid {...grid} />
+        <LineChart data={data} margin={margin} onMouseLeave={handleMouseLeave}>
           <XAxis {...xAxis} />
           <YAxis {...yAxis} />
-          <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} />
+          <Tooltip content={tooltipEl} cursor={cursorStyle} isAnimationActive={false} />
           <Line
             type="monotone" dataKey="value" stroke="#FF007A" strokeWidth={2}
             dot={false} activeDot={{ r: 4, fill: '#FF007A', stroke: '#fff', strokeWidth: 1.5 }}
@@ -137,11 +136,10 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
       );
     }
     return (
-      <AreaChart data={data} margin={margin}>
-        <CartesianGrid {...grid} />
+      <AreaChart data={data} margin={margin} onMouseLeave={handleMouseLeave}>
         <XAxis {...xAxis} />
         <YAxis {...yAxis} />
-        <Tooltip content={<ChartTooltip metric={config.metric} range={config.range} chain={config.chain} />} />
+        <Tooltip content={tooltipEl} cursor={cursorStyle} isAnimationActive={false} />
         <defs>
           <linearGradient id={`af-${chartId}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#FF007A" stopOpacity={0.25} />
@@ -162,7 +160,17 @@ export function RenderChart({ config, data, chartId, height }: { config: ChartCo
   };
 
   return (
-    <div className={height ?? 'h-[240px]'}>
+    <div className={`relative ${height ?? 'h-[240px]'}`}>
+      <div
+        className="absolute inset-0 pointer-events-none rounded-lg overflow-hidden"
+        style={{
+          backgroundImage: `
+            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
+          `,
+          backgroundSize: '24px 24px',
+        }}
+      />
       <ResponsiveContainer width="100%" height="100%">{inner()}</ResponsiveContainer>
     </div>
   );
@@ -416,9 +424,16 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(chart.title);
   const [flash, setFlash] = useState(false);
+  const [hoverValue, setHoverValue] = useState<number | null>(null);
+  const [hoverTime, setHoverTime] = useState<string | null>(null);
   const prevLenRef = useRef(chart.data.length);
   const stats = getChartStats(chart.data);
   const { config } = chart;
+
+  const handleHoverValue = useCallback((value: number | null, time: string | null) => {
+    setHoverValue(value);
+    setHoverTime(time);
+  }, []);
 
   useEffect(() => {
     if (chart.data.length > prevLenRef.current) {
@@ -430,6 +445,8 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
   }, [chart.data.length]);
 
   const lastBlock = chart.data.length > 0 ? chart.data[chart.data.length - 1].block : undefined;
+  const displayValue = hoverValue != null ? hoverValue : stats.current;
+  const isHovering = hoverValue != null;
 
   const commitRename = () => {
     onRename(chart.id, title || chart.title);
@@ -437,8 +454,8 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
   };
 
   return (
-    <div className={`group rounded-2xl border bg-white/[0.04] backdrop-blur-xl transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.06] ${flash ? 'border-[#FF007A]/40 shadow-[0_0_20px_rgba(255,0,122,0.15)]' : 'border-white/[0.08]'}`}>
-      <div className="flex items-center justify-between px-5 pt-5 pb-1">
+    <div className={`rounded-2xl border bg-white/[0.04] backdrop-blur-xl transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.06] ${flash ? 'border-[#FF007A]/40 shadow-[0_0_20px_rgba(255,0,122,0.15)]' : 'border-white/[0.08]'}`}>
+      <div className="flex items-start justify-between px-5 pt-5 pb-1">
         <div className="min-w-0 flex-1">
           {editing ? (
             <div className="flex items-center gap-1.5">
@@ -468,13 +485,28 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
             </div>
           )}
         </div>
-        <div className="flex gap-0.5 ml-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-          <Button variant="ghost" size="icon-xs" onClick={() => onExpand(chart)} title="Expand"
-            className="text-white/30 hover:text-white hover:bg-white/[0.08]"><Maximize2 className="h-3 w-3" /></Button>
-          <Button variant="ghost" size="icon-xs" onClick={() => setEditing(true)} title="Rename"
-            className="text-white/30 hover:text-white hover:bg-white/[0.08]"><Pencil className="h-3 w-3" /></Button>
-          <Button variant="ghost" size="icon-xs" onClick={() => onDelete(chart.id)} title="Delete"
-            className="text-white/30 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /></Button>
+        <div className="group/actions flex flex-col items-end gap-1 ml-3 shrink-0">
+          {chart.data.length > 0 && (
+            <div className="flex flex-col items-end">
+              <span
+                className="text-[24px] font-bold text-white tabular-nums tracking-tight transition-all duration-100"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {formatValue(displayValue, config.metric, config.chain)}
+              </span>
+              <span className={`text-[10px] -mt-0.5 h-[15px] ${isHovering && hoverTime ? 'text-white/30' : 'text-transparent'}`}>
+                {isHovering && hoverTime ? hoverTime : '\u00A0'}
+              </span>
+            </div>
+          )}
+          <div className="flex gap-0.5 opacity-0 group-hover/actions:opacity-100 transition-opacity duration-150">
+            <Button variant="ghost" size="icon-xs" onClick={() => onExpand(chart)} title="Expand"
+              className="text-white/30 hover:text-white hover:bg-white/[0.08]"><Maximize2 className="h-3 w-3" /></Button>
+            <Button variant="ghost" size="icon-xs" onClick={() => setEditing(true)} title="Rename"
+              className="text-white/30 hover:text-white hover:bg-white/[0.08]"><Pencil className="h-3 w-3" /></Button>
+            <Button variant="ghost" size="icon-xs" onClick={() => onDelete(chart.id)} title="Delete"
+              className="text-white/30 hover:text-red-400 hover:bg-red-500/10"><Trash2 className="h-3 w-3" /></Button>
+          </div>
         </div>
       </div>
 
@@ -509,7 +541,7 @@ export function ChartCard({ chart, onRename, onDelete, onExpand }: ChartCardProp
               </div>
             ) : (
               <>
-                <RenderChart config={config} data={chart.data} chartId={chart.id} />
+                <RenderChart config={config} data={chart.data} chartId={chart.id} onHoverValue={handleHoverValue} />
                 {chart.backfilling && <BackfillOverlay />}
               </>
             )}

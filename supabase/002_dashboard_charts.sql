@@ -3,7 +3,7 @@ create table dashboard_charts (
   id uuid primary key default gen_random_uuid(),
   pool_name text not null,
   metric text not null check (metric in ('Price', 'Volume', 'Fees', 'Swap Count')),
-  time_range text not null check (time_range in ('1H', '24H', '7D', '30D')),
+  time_range text not null check (time_range in ('1H', '24H', '7D')),
   chart_type text not null default 'area' check (chart_type in ('line', 'area', 'bar')),
   title text not null,
   position smallint not null default 0,

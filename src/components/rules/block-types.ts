@@ -17,6 +17,8 @@ export const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'Pool', category: 'trigger', label: 'Pool' },
 
   { type: 'Price', category: 'condition', label: 'Price Threshold' },
+  { type: 'Volume', category: 'condition', label: 'Volume (USD)' },
+  { type: 'Swap Count', category: 'condition', label: 'Swap Count' },
 
   { type: 'Create Alert', category: 'action', label: 'Create Alert' },
   { type: 'Recommend Swap', category: 'action', label: 'Recommend Swap' },
@@ -67,7 +69,11 @@ export function getBlockError(block: CanvasBlock): string | null {
   }
   if (block.category === 'condition') {
     const val = String(block.config.value || '').trim();
-    if (!val || isNaN(Number(val)) || Number(val) === 0) return 'Enter a price value';
+    if (block.type === 'Swap Count') {
+      if (!val || isNaN(Number(val)) || Number(val) === 0) return 'Enter a count';
+    } else {
+      if (!val || isNaN(Number(val)) || Number(val) === 0) return 'Enter a value';
+    }
     return null;
   }
   if (block.type === 'Recommend Swap') {
@@ -99,6 +105,7 @@ export function createDefaultConfig(category: BlockCategory, type: string): Reco
     return { pool: 'WETH/USDC', chain: 'eth' };
   }
   if (category === 'condition') {
+    if (type === 'Swap Count' || type === 'Volume') return { operator: '>', value: '', window: '5m' };
     return { operator: '>', value: '' };
   }
   if (type === 'Recommend Swap') return { token: '', amount: '' };

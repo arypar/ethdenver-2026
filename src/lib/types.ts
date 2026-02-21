@@ -1,7 +1,7 @@
 export type ChainId = 'eth' | 'monad';
 export type Metric = 'Price' | 'Volume' | 'TVL' | 'Fees' | 'Swap Count' | 'Liquidity' | 'Liquidity Delta';
 export type Pool = string;
-export type TimeRange = '1H' | '24H' | '7D' | '30D';
+export type TimeRange = '1H' | '24H' | '7D';
 export type ChartType = 'line' | 'area' | 'bar';
 
 export interface ChartConfig {
@@ -30,7 +30,7 @@ export interface ChartDataPoint {
 }
 
 export type TriggerType = 'Swap' | 'Liquidity Added' | 'Liquidity Removed';
-export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Liquidity Change %' | 'Swap Direction' | 'Count in Window';
+export type ConditionField = 'Price' | 'Notional USD' | 'Price Impact %' | 'Liquidity Change %' | 'Swap Direction' | 'Count in Window' | 'Volume' | 'Swap Count';
 export type ConditionOperator = '>' | '>=' | '<' | '<=' | '=';
 export type WindowSize = '1m' | '5m' | '15m' | '1h';
 export type ActionType = 'Create Alert' | 'Notify' | 'Recommend Swap' | 'Auto Swap' | 'Add Liquidity' | 'Remove Liquidity';
@@ -55,6 +55,8 @@ export interface RuleAction {
   };
 }
 
+export type ConditionLogic = 'AND' | 'OR';
+
 export interface Rule {
   id: string;
   name: string;
@@ -66,6 +68,7 @@ export interface Rule {
     watchedWallet?: string;
   };
   conditions: RuleCondition[];
+  conditionLogic?: ConditionLogic;
   actions: RuleAction[];
   createdAt: number;
 }

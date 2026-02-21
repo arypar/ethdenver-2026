@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useEffect } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { PoolInput } from '@/components/ui/pool-input';
 import { GripVertical, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTokenResolve } from '@/hooks/use-token-resolve';
+import { useTokenResolve, type TokenInfo } from '@/hooks/use-token-resolve';
 import { CATEGORY_META, type CanvasBlock, type BlockCategory } from './block-types';
 import type { ConditionOperator } from '@/lib/types';
 
@@ -81,8 +82,14 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
   );
 }
 
-function MonadTokenInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function MonadTokenInput({ value, onChange, onResolve }: { value: string; onChange: (v: string) => void; onResolve?: (info: TokenInfo | null) => void }) {
   const { info, resolving } = useTokenResolve(value, true);
+  const onResolveRef = useRef(onResolve);
+  onResolveRef.current = onResolve;
+
+  useEffect(() => {
+    onResolveRef.current?.(info);
+  }, [info]);
 
   if (info && !resolving) {
     return (
@@ -122,7 +129,7 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
     const chain = String(block.config.chain || 'eth');
     return (
       <div className="flex flex-col gap-1.5">
-        <Select value={chain} onValueChange={v => updateField('chain', v)}>
+        <Select value={chain} onValueChange={v => { updateField('chain', v); updateField('pool', ''); updateField('tokenSymbol', ''); }}>
           <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
           <SelectContent position="popper">
             <SelectItem value="eth">Ethereum</SelectItem>
@@ -133,6 +140,7 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
           <MonadTokenInput
             value={String(block.config.pool || '')}
             onChange={v => updateField('pool', v)}
+            onResolve={info => updateField('tokenSymbol', info?.symbol ?? '')}
           />
         ) : (
           <PoolInput
@@ -141,6 +149,69 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
             inputClassName="h-8"
           />
         )}
+      </div>
+    );
+  }
+
+  if (block.category === 'condition' && block.type === 'Swap Count') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Select value={String(block.config.operator || '>')} onValueChange={v => updateField('operator', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value=">">more than</SelectItem>
+            <SelectItem value="<">fewer than</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          type="number"
+          value={String(block.config.value || '')}
+          onChange={e => updateField('value', e.target.value)}
+          placeholder="10"
+          className={cn(INPUT_CLASS, 'w-full')}
+        />
+        <Select value={String(block.config.window || '5m')} onValueChange={v => updateField('window', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="1m">in 1 min</SelectItem>
+            <SelectItem value="5m">in 5 min</SelectItem>
+            <SelectItem value="15m">in 15 min</SelectItem>
+            <SelectItem value="1h">in 1 hour</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
+
+  if (block.category === 'condition' && block.type === 'Volume') {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Select value={String(block.config.operator || '>')} onValueChange={v => updateField('operator', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value=">">above</SelectItem>
+            <SelectItem value="<">below</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-white/30">$</span>
+          <Input
+            type="number"
+            value={String(block.config.value || '')}
+            onChange={e => updateField('value', e.target.value)}
+            placeholder="50000"
+            className={cn(INPUT_CLASS, 'w-full pl-6')}
+          />
+        </div>
+        <Select value={String(block.config.window || '5m')} onValueChange={v => updateField('window', v)}>
+          <SelectTrigger className={cn(INPUT_CLASS, 'w-full')} size="sm"><SelectValue /></SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value="1m">in 1 min</SelectItem>
+            <SelectItem value="5m">in 5 min</SelectItem>
+            <SelectItem value="15m">in 15 min</SelectItem>
+            <SelectItem value="1h">in 1 hour</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     );
   }

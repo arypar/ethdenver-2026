@@ -82,14 +82,28 @@ export function evaluateCondition(
       };
     }
 
-    case 'Count in Window': {
+    case 'Count in Window':
+    case 'Swap Count': {
       const windowMs = WINDOW_MS[condition.window || '5m'];
       const cutoff = swap.timestamp - windowMs;
       const count = recentSwaps.filter(s => s.timestamp >= cutoff).length + 1;
       const met = compare(count, condition.operator, threshold);
       return {
         met,
-        description: `Count in ${condition.window || '5m'}: ${count} swaps ${condition.operator} ${threshold}`,
+        description: `Swap Count in ${condition.window || '5m'}: ${count} ${condition.operator} ${threshold}`,
+      };
+    }
+
+    case 'Volume': {
+      const windowMs = WINDOW_MS[condition.window || '5m'];
+      const cutoff = swap.timestamp - windowMs;
+      const total = recentSwaps
+        .filter(s => s.timestamp >= cutoff)
+        .reduce((sum, s) => sum + s.volumeUSD, 0) + swap.volumeUSD;
+      const met = compare(total, condition.operator, threshold);
+      return {
+        met,
+        description: `Volume in ${condition.window || '5m'}: ${formatUSD(total)} ${condition.operator} ${formatUSD(threshold)}`,
       };
     }
 
@@ -107,9 +121,11 @@ export function evaluateRule(
   if (rule.trigger.pool !== swap.pool) return null;
 
   const results = rule.conditions.map(c => evaluateCondition(c, swap, recentSwaps));
-  const allMet = results.length === 0 || results.every(r => r.met);
+  const logic = rule.conditionLogic || 'AND';
+  const passed = results.length === 0
+    || (logic === 'AND' ? results.every(r => r.met) : results.some(r => r.met));
 
-  if (!allMet) return null;
+  if (!passed) return null;
 
   const conditionsMet = results.filter(r => r.met).map(r => r.description);
 

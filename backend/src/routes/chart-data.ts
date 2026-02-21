@@ -8,7 +8,7 @@ const router = Router();
 const SECS_PER_BLOCK = 12;
 
 type Metric = 'Price' | 'Volume' | 'Fees' | 'Swap Count';
-type TimeRange = '1H' | '24H' | '7D' | '30D';
+type TimeRange = '1H' | '24H' | '7D';
 
 interface RangeConfig {
   buckets: number;
@@ -20,7 +20,6 @@ const RANGE_CONFIG: Record<TimeRange, RangeConfig> = {
   '1H':  { buckets: 60,  blocksBack: 300,    blocksPerBucket: 5 },
   '24H': { buckets: 96,  blocksBack: 7200,   blocksPerBucket: 75 },
   '7D':  { buckets: 84,  blocksBack: 50400,  blocksPerBucket: 600 },
-  '30D': { buckets: 60,  blocksBack: 216000, blocksPerBucket: 3600 },
 };
 
 function formatTimeLabel(msAgo: number): string {

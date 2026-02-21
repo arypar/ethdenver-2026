@@ -34,7 +34,6 @@ const RANGE_POINTS: Record<TimeRange, number> = {
   '1H': 12,
   '24H': 24,
   '7D': 28,
-  '30D': 30,
 };
 
 const METRIC_BASES: Record<string, [number, number]> = {
