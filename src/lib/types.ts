@@ -84,5 +84,6 @@ export interface ActionItem {
     pool: string;
     conditionsMet: string[];
     proposedActions: string[];
+    actionTypes?: string[];
   };
 }

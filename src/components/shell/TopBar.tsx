@@ -2,6 +2,7 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Wallet } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface TopBarProps {
   children?: React.ReactNode;
@@ -29,6 +30,7 @@ export function TopBar({ children }: TopBarProps) {
             const connected = mounted && account && chain;
             return (
               <div className="flex items-center gap-2">
+                <NotificationBell />
                 <button
                   onClick={connected ? openAccountModal : openConnectModal}
                   className="flex h-9 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.05] px-3.5 backdrop-blur-xl transition-all hover:bg-white/[0.1] hover:border-white/[0.16]"

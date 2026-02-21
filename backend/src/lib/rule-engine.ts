@@ -117,6 +117,7 @@ async function insertAction(rule: DbRule, swap: SwapRecord, conditionsMet: strin
       pool: swap.pool,
       conditionsMet,
       proposedActions,
+      actionTypes: rule.actions.map(a => a.type),
     },
   });
 

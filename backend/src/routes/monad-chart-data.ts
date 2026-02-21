@@ -5,7 +5,7 @@ import { log, logError } from '../lib/log.js';
 
 const router = Router();
 
-const SECS_PER_BLOCK = 0.5;
+const SECS_PER_BLOCK = 1;
 
 type Metric = 'Price' | 'Volume' | 'Swap Count' | 'Fees';
 type TimeRange = '1H' | '24H' | '7D' | '30D';
@@ -17,10 +17,10 @@ interface RangeConfig {
 }
 
 const RANGE_CONFIG: Record<TimeRange, RangeConfig> = {
-  '1H':  { buckets: 60,  blocksBack: 7_200,      blocksPerBucket: 120 },
-  '24H': { buckets: 96,  blocksBack: 172_800,     blocksPerBucket: 1_800 },
-  '7D':  { buckets: 84,  blocksBack: 1_209_600,   blocksPerBucket: 14_400 },
-  '30D': { buckets: 60,  blocksBack: 5_184_000,   blocksPerBucket: 86_400 },
+  '1H':  { buckets: 60,  blocksBack: 3_600,      blocksPerBucket: 60 },
+  '24H': { buckets: 96,  blocksBack: 86_400,     blocksPerBucket: 900 },
+  '7D':  { buckets: 84,  blocksBack: 604_800,    blocksPerBucket: 7_200 },
+  '30D': { buckets: 60,  blocksBack: 2_592_000,  blocksPerBucket: 43_200 },
 };
 
 function formatTimeLabel(msAgo: number): string {
@@ -32,13 +32,13 @@ function formatTimeLabel(msAgo: number): string {
   return `${days.toFixed(1)}d ago`;
 }
 
-function bucketSwaps(swaps: MonadSwapRecord[], config: RangeConfig, latestBlock: number) {
-  const startBlock = latestBlock - config.blocksBack;
+function bucketSwaps(swaps: MonadSwapRecord[], config: RangeConfig) {
   const now = Date.now();
   const totalMs = config.blocksBack * SECS_PER_BLOCK * 1000;
+  const startMs = now - totalMs;
+  const msPerBucket = totalMs / config.buckets;
 
   interface Bucket {
-    blockEnd: number;
     label: string;
     closingPrice: number | null;
     volumeMON: number;
@@ -48,11 +48,9 @@ function bucketSwaps(swaps: MonadSwapRecord[], config: RangeConfig, latestBlock:
 
   const buckets: Bucket[] = [];
   for (let i = 0; i < config.buckets; i++) {
-    const blockEnd = startBlock + (i + 1) * config.blocksPerBucket;
     const bucketFraction = (i + 1) / config.buckets;
     const msAgo = totalMs * (1 - bucketFraction);
     buckets.push({
-      blockEnd,
       label: formatTimeLabel(msAgo),
       closingPrice: null,
       volumeMON: 0,
@@ -62,10 +60,10 @@ function bucketSwaps(swaps: MonadSwapRecord[], config: RangeConfig, latestBlock:
   }
 
   for (const swap of swaps) {
-    if (swap.blockNumber < startBlock) continue;
+    if (swap.timestamp < startMs) continue;
     const idx = Math.min(
       config.buckets - 1,
-      Math.max(0, Math.floor((swap.blockNumber - startBlock) / config.blocksPerBucket)),
+      Math.max(0, Math.floor((swap.timestamp - startMs) / msPerBucket)),
     );
     buckets[idx].closingPrice = swap.price;
     buckets[idx].volumeMON += swap.volumeMON;

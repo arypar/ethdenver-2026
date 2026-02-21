@@ -2,15 +2,15 @@ import { createPublicClient, http, parseAbiItem, formatEther, defineChain } from
 import { EventEmitter } from 'events';
 import { log, logError } from './log.js';
 import { supabase, DB_ENABLED } from './supabase.js';
-import { resolveToken, type NadToken } from './nadfun-api.js';
+import { resolveToken, getSwapHistorySince, type NadToken, type NadSwap } from './nadfun-api.js';
 
 const MONAD_RPC = process.env.MONAD_RPC_URL || 'https://monad-mainnet.drpc.org';
 const CURVE_ADDRESS = '0xA7283d07812a02AFB7C09B60f8896bCEA3F90aCE' as const;
 const POLL_MS = 3_000;
-const LOG_CHUNK_SIZE = 5000;
+const LOG_CHUNK_SIZE = 1000;
 const CONCURRENCY = 3;
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const SECS_PER_BLOCK = 0.5;
+const SECS_PER_BLOCK = 1;
 
 const monadChain = defineChain({
   id: 143,
@@ -61,6 +61,28 @@ function computePrice(direction: 'buy' | 'sell', amountIn: bigint, amountOut: bi
   const tokensIn = Number(formatEther(amountIn));
   if (tokensIn === 0) return 0;
   return monOut / tokensIn;
+}
+
+function apiSwapsToRecords(token: string, apiSwaps: NadSwap[]): MonadSwapRecord[] {
+  return apiSwaps.map(s => {
+    const info = s.swap_info;
+    const direction: 'buy' | 'sell' = info.event_type === 'BUY' ? 'buy' : 'sell';
+    const nativeAmount = Number(formatEther(BigInt(info.native_amount)));
+    const tokenAmount = Number(formatEther(BigInt(info.token_amount)));
+    const price = tokenAmount > 0 ? nativeAmount / tokenAmount : 0;
+    return {
+      token: token.toLowerCase(),
+      direction,
+      amountIn: info.native_amount,
+      amountOut: info.token_amount,
+      price,
+      volumeMON: nativeAmount,
+      sender: '',
+      blockNumber: 0,
+      txHash: info.transaction_hash,
+      timestamp: info.created_at * 1000,
+    };
+  });
 }
 
 async function dbInsertMonadSwaps(swaps: MonadSwapRecord[]): Promise<void> {
@@ -172,7 +194,7 @@ class MonadTokenTracker extends EventEmitter {
     const label = meta?.symbol || addr.slice(0, 10);
     log('monad-tracker', `Now tracking ${label} — backfilling...`);
 
-    const initialBlocks = Math.round((24 * 60 * 60) / SECS_PER_BLOCK);
+    const initialBlocks = Math.round((1 * 60 * 60) / SECS_PER_BLOCK);
     this.backfill(addr, initialBlocks).catch(err =>
       logError('monad-tracker', `Backfill failed for ${label}: ${err instanceof Error ? err.message : 'unknown'}`),
     );
@@ -289,17 +311,32 @@ class MonadTokenTracker extends EventEmitter {
       }
 
       newSwaps.sort((a, b) => a.blockNumber - b.blockNumber);
-      state.swaps = newSwaps;
-      state.backfillBlocks = blocksBack;
 
       const label = state.meta?.symbol || addr.slice(0, 10);
-      if (newSwaps.length > 0) {
+
+      if (newSwaps.length === 0) {
+        log('monad-tracker', `${label}: 0 on-chain swaps — trying nad.fun API...`);
+        const sinceTs = Math.floor((now - blocksBack * SECS_PER_BLOCK * 1000) / 1000);
+        const apiSwaps = await getSwapHistorySince(addr, sinceTs);
+        if (apiSwaps.length > 0) {
+          const converted = apiSwapsToRecords(addr, apiSwaps);
+          converted.sort((a, b) => a.timestamp - b.timestamp);
+          state.swaps = converted;
+          state.backfillBlocks = blocksBack;
+          const totalVol = converted.reduce((s, sw) => s + sw.volumeMON, 0);
+          log('monad-tracker', `Backfilled ${label} via API: ${converted.length} swaps | vol ${totalVol.toFixed(2)} MON`);
+          await dbInsertMonadSwaps(converted);
+          state.backfilling = false;
+          return;
+        }
+        log('monad-tracker', `Backfilled ${label}: 0 swaps (on-chain + API)`);
+      } else {
         const totalVol = newSwaps.reduce((s, sw) => s + sw.volumeMON, 0);
         log('monad-tracker', `Backfilled ${label}: ${newSwaps.length} swaps | vol ${totalVol.toFixed(2)} MON`);
-      } else {
-        log('monad-tracker', `Backfilled ${label}: 0 swaps found`);
       }
 
+      state.swaps = newSwaps;
+      state.backfillBlocks = blocksBack;
       await dbInsertMonadSwaps(newSwaps);
     } catch (err) {
       logError('monad-tracker', `Backfill failed: ${err instanceof Error ? err.message : 'unknown'}`);
@@ -410,6 +447,31 @@ class MonadTokenTracker extends EventEmitter {
     }
   }
 
+  private async fetchLogsChunk(event: any, tokenAddress: `0x${string}`, from: bigint, to: bigint): Promise<any[]> {
+    try {
+      return await rpc.getLogs({
+        address: CURVE_ADDRESS,
+        event,
+        args: { token: tokenAddress },
+        fromBlock: from,
+        toBlock: to,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('block range') || msg.includes('too large') || msg.includes('exceed')) {
+        const mid = from + (to - from) / BigInt(2);
+        if (mid === from) return [];
+        log('monad-tracker', `Splitting chunk ${Number(from)}..${Number(to)} (range too large)`);
+        const [a, b] = await Promise.all([
+          this.fetchLogsChunk(event, tokenAddress, from, mid),
+          this.fetchLogsChunk(event, tokenAddress, mid + BigInt(1), to),
+        ]);
+        return [...a, ...b];
+      }
+      throw err;
+    }
+  }
+
   private async fetchLogs(event: any, tokenAddress: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<any[]> {
     const chunks: Array<{ from: bigint; to: bigint }> = [];
     let from = fromBlock;
@@ -423,15 +485,7 @@ class MonadTokenTracker extends EventEmitter {
     for (let i = 0; i < chunks.length; i += CONCURRENCY) {
       const batch = chunks.slice(i, i + CONCURRENCY);
       const results = await Promise.all(
-        batch.map(({ from: f, to: t }) =>
-          rpc.getLogs({
-            address: CURVE_ADDRESS,
-            event,
-            args: { token: tokenAddress },
-            fromBlock: f,
-            toBlock: t,
-          }),
-        ),
+        batch.map(({ from: f, to: t }) => this.fetchLogsChunk(event, tokenAddress, f, t)),
       );
       for (const logs of results) allLogs.push(...logs);
     }
