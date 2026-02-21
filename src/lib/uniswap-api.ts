@@ -5,8 +5,8 @@ export interface QuoteParams {
   swapper: string;
   tokenIn: string;
   tokenOut: string;
-  tokenInChainId: string;
-  tokenOutChainId: string;
+  tokenInChainId: number;
+  tokenOutChainId: number;
   amount: string;
   type: 'EXACT_INPUT' | 'EXACT_OUTPUT';
   slippageTolerance?: number;
@@ -160,8 +160,8 @@ export async function buildQuoteParams(
     swapper,
     tokenIn: tokenIn.address,
     tokenOut: tokenOut.address,
-    tokenInChainId: String(chainId),
-    tokenOutChainId: String(chainId),
+    tokenInChainId: chainId,
+    tokenOutChainId: chainId,
     amount,
     type: 'EXACT_INPUT',
   };

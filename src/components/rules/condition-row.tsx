@@ -5,7 +5,7 @@ import { PillInput } from '@/components/pill-input';
 import { X } from 'lucide-react';
 import type { RuleCondition, ConditionField, ConditionOperator, WindowSize } from '@/lib/types';
 
-const FIELDS: ConditionField[] = ['Notional USD', 'Price Impact %', 'Liquidity Change %', 'Swap Direction', 'Count in Window'];
+const FIELDS: ConditionField[] = ['Price', 'Notional USD', 'Price Impact %', 'Liquidity Change %', 'Swap Direction', 'Count in Window'];
 const OPERATORS: ConditionOperator[] = ['>', '>=', '<', '<=', '='];
 const WINDOWS: WindowSize[] = ['1m', '5m', '15m', '1h'];
 const WINDOWED_FIELDS: ConditionField[] = ['Count in Window', 'Liquidity Change %'];

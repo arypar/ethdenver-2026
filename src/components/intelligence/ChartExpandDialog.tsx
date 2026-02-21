@@ -218,30 +218,66 @@ export function ChartExpandDialog({ chart, open, onClose }: ChartExpandDialogPro
               </div>
 
               {/* Chart */}
-              <div className="flex-1 min-h-0 px-4 pb-2">
+              <div className="flex-1 min-h-0 px-4 pb-2 relative">
                 {chart.data.length === 0 ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
-                      {chart.backfilling ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <span className="text-[13px] text-white/30">
-                            Backfilling {config.range} data{chart.backfillProgress != null ? `... ${chart.backfillProgress}%` : '...'}
-                          </span>
-                          <div className="w-48 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-[#FF007A] transition-all duration-500 ease-out"
-                              style={{ width: `${chart.backfillProgress ?? 5}%` }}
+                  <div className="flex h-full items-center justify-center relative overflow-hidden">
+                    {chart.backfilling ? (
+                      <>
+                        <div className="absolute inset-0 opacity-20 overflow-hidden">
+                          <svg viewBox="0 0 400 200" className="w-full h-full" preserveAspectRatio="none">
+                            <defs>
+                              <linearGradient id="expSkeletonFill" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor="#FF007A" stopOpacity={0.3} />
+                                <stop offset="100%" stopColor="#FF007A" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M0,160 C30,155 60,140 90,130 C120,120 150,100 180,110 C210,120 240,90 270,80 C300,70 330,85 360,60 L360,200 L0,200 Z"
+                              fill="url(#expSkeletonFill)"
                             />
-                          </div>
+                            <path
+                              d="M0,160 C30,155 60,140 90,130 C120,120 150,100 180,110 C210,120 240,90 270,80 C300,70 330,85 360,60"
+                              fill="none" stroke="#FF007A" strokeWidth="2" strokeOpacity="0.4"
+                            />
+                          </svg>
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background: 'linear-gradient(90deg, transparent 0%, rgba(255,0,122,0.06) 50%, transparent 100%)',
+                              animation: 'shimmerSweep 2s ease-in-out infinite',
+                            }}
+                          />
                         </div>
-                      ) : (
+                        <div className="flex flex-col items-center gap-2 bg-black/60 backdrop-blur-sm rounded-xl px-5 py-3 border border-white/[0.06] z-10">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
+                            <span className="text-[13px] text-white/50 font-medium">Scanning blocks...</span>
+                          </div>
+                          <span className="text-[10px] text-white/25">Data will appear as it loads</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[#FF007A]" />
                         <span className="text-[13px] text-white/30">Loading on-chain data...</span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <RenderChart config={config} data={chart.data} chartId={`exp-${chart.id}`} height="h-full" />
+                  <>
+                    <RenderChart config={config} data={chart.data} chartId={`exp-${chart.id}`} height="h-full" />
+                    {chart.backfilling && (
+                      <div className="absolute top-1 right-6 z-10">
+                        <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-sm rounded-full px-2.5 py-1 border border-[#FF007A]/20">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF007A] opacity-75" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF007A]" />
+                          </span>
+                          <span className="text-[10px] font-medium text-[#FF007A]/80">Scanning blocks</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

@@ -6,7 +6,7 @@ import { ActionDetailDialog } from './ActionDetailDialog';
 import { ExecuteDialog } from './ExecuteDialog';
 import { cn } from '@/lib/utils';
 import { Eye, PlayCircle, XCircle, Inbox, Radio, Trash2 } from 'lucide-react';
-import type { ActionItem, ActionStatus } from '@/lib/types';
+import type { ActionItem, ActionStatus, ChainId } from '@/lib/types';
 
 type Filter = 'All' | 'Pending' | 'Completed' | 'Dismissed';
 const FILTERS: Filter[] = ['All', 'Pending', 'Completed', 'Dismissed'];
@@ -22,7 +22,7 @@ interface ActionsInboxProps {
 export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, onConnectRequired }: ActionsInboxProps) {
   const [filter, setFilter] = useState<Filter>('All');
   const [reviewAction, setReviewAction] = useState<ActionItem | null>(null);
-  const [executeState, setExecuteState] = useState<{ open: boolean; id: string; label: string; pool: string }>({ open: false, id: '', label: '', pool: '' });
+  const [executeState, setExecuteState] = useState<{ open: boolean; id: string; label: string; pool: string; chain?: ChainId }>({ open: false, id: '', label: '', pool: '' });
 
   const filtered = actions.filter(a => filter === 'All' || a.status === filter);
   const liveCount = actions.filter(a => a.source === 'live').length;
@@ -31,7 +31,7 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
     if (!connected) { onConnectRequired(); return; }
     const a = actions.find(x => x.id === id);
     if (!a) return;
-    setExecuteState({ open: true, id, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC' });
+    setExecuteState({ open: true, id, label: a.suggestedAction || 'Action', pool: a.details.pool || 'WETH/USDC', chain: a.details.chain });
   };
 
   return (
@@ -113,7 +113,7 @@ export function ActionsInbox({ actions, connected, onUpdateStatus, onClearAll, o
       )}
 
       <ActionDetailDialog action={reviewAction} open={!!reviewAction} onClose={() => setReviewAction(null)} onExecute={handleExecute} connected={connected} onConnectRequired={onConnectRequired} />
-      <ExecuteDialog open={executeState.open} onClose={() => setExecuteState({ open: false, id: '', label: '', pool: '' })} onConfirm={() => onUpdateStatus(executeState.id, 'Completed')} label={executeState.label} pool={executeState.pool} />
+      <ExecuteDialog open={executeState.open} onClose={() => setExecuteState({ open: false, id: '', label: '', pool: '' })} onConfirm={() => onUpdateStatus(executeState.id, 'Completed')} label={executeState.label} pool={executeState.pool} chain={executeState.chain} />
     </div>
   );
 }

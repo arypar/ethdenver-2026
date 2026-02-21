@@ -1,4 +1,4 @@
-import type { Rule, RuleCondition, ActionItem, WindowSize, ConditionOperator } from './types';
+import type { Rule, RuleCondition, ActionItem, WindowSize, ConditionOperator, ChainId } from './types';
 import type { SwapEvent } from './use-pool-stream';
 
 const WINDOW_MS: Record<WindowSize, number> = {
@@ -113,7 +113,9 @@ export function evaluateRule(
 
   const conditionsMet = results.filter(r => r.met).map(r => r.description);
 
-  const triggerReason = `${formatUSD(swap.volumeUSD)} swap on ${swap.pool} at $${swap.price.toLocaleString()}`;
+  const chain: ChainId = rule.trigger.chain ?? 'eth';
+  const volLabel = chain === 'monad' ? `${swap.volumeUSD.toFixed(2)} MON` : formatUSD(swap.volumeUSD);
+  const triggerReason = `${volLabel} swap on ${swap.pool} at $${swap.price.toLocaleString()}`;
 
   const proposedActions = rule.actions.map(a => {
     switch (a.type) {
@@ -142,6 +144,7 @@ export function evaluateRule(
     details: {
       eventType: rule.trigger.type,
       pool: swap.pool,
+      chain,
       conditionsMet,
       proposedActions,
     },

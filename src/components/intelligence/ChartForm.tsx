@@ -1,52 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { PoolInput } from '@/components/ui/pool-input';
 import { cn } from '@/lib/utils';
 import { Plus, Loader2 } from 'lucide-react';
 import { WELL_KNOWN_POOLS } from '@/lib/tokens';
+import { useTokenResolve } from '@/hooks/use-token-resolve';
+import type { TokenInfo } from '@/hooks/use-token-resolve';
 import type { ChainId, ChartConfig, Metric, TimeRange, ChartType } from '@/lib/types';
 
 const ETH_METRICS: Metric[] = ['Price', 'Volume', 'Fees', 'Swap Count'];
 const MONAD_METRICS: Metric[] = ['Price', 'Volume', 'Swap Count'];
 const RANGES: TimeRange[] = ['1H', '24H', '7D', '30D'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar'];
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-interface TokenInfo {
-  name: string;
-  symbol: string;
-  image?: string;
-}
-
-function useTokenResolve(address: string, enabled: boolean) {
-  const [info, setInfo] = useState<TokenInfo | null>(null);
-  const [resolving, setResolving] = useState(false);
-  const lastAddr = useRef('');
-
-  useEffect(() => {
-    if (!enabled || !address.match(/^0x[a-fA-F0-9]{40}$/)) {
-      setInfo(null);
-      lastAddr.current = '';
-      return;
-    }
-    if (address.toLowerCase() === lastAddr.current) return;
-    lastAddr.current = address.toLowerCase();
-    setResolving(true);
-    const controller = new AbortController();
-    fetch(`${API_BASE}/monad/token-info/${address}`, { signal: controller.signal })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setInfo({ name: data.name, symbol: data.symbol, image: data.image }); })
-      .catch(() => {})
-      .finally(() => setResolving(false));
-    return () => controller.abort();
-  }, [address, enabled]);
-
-  return { info, resolving };
-}
 
 interface ChartFormProps {
   config: ChartConfig;

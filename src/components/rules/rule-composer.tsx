@@ -10,10 +10,11 @@ import { ActionRow } from './action-row';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Plus, Zap, Filter, Play, Layers } from 'lucide-react';
-import type { Rule, TriggerType, Pool, RuleCondition, RuleAction } from '@/lib/types';
+import type { Rule, TriggerType, Pool, RuleCondition, RuleAction, ChainId } from '@/lib/types';
 
 const TRIGGERS: TriggerType[] = ['Swap', 'Liquidity Added', 'Liquidity Removed'];
-const POOLS: Pool[] = ['WETH/USDC', 'WBTC/ETH', 'UNI/ETH', 'ARB/USDC', 'LINK/ETH', 'MATIC/USDC'];
+const CHAINS: ChainId[] = ['eth', 'monad'];
+const ETH_POOLS: Pool[] = ['WETH/USDC', 'WBTC/ETH', 'UNI/ETH', 'ARB/USDC', 'LINK/ETH', 'MATIC/USDC'];
 
 interface RuleComposerProps {
   connected: boolean;
@@ -24,12 +25,16 @@ interface RuleComposerProps {
 
 export function RuleComposer({ connected, onActivate, onConnectRequired, editingRule }: RuleComposerProps) {
   const [name, setName] = useState(editingRule?.name || '');
+  const [chain, setChain] = useState<ChainId>(editingRule?.trigger.chain || 'eth');
   const [triggerType, setTriggerType] = useState<TriggerType>(editingRule?.trigger.type || 'Swap');
   const [pool, setPool] = useState<Pool>(editingRule?.trigger.pool || 'WETH/USDC');
+  const [monadToken, setMonadToken] = useState(chain === 'monad' ? editingRule?.trigger.pool || '' : '');
   const [watchWallet, setWatchWallet] = useState(editingRule?.trigger.watchedWallet || '');
   const [showWallet, setShowWallet] = useState(!!editingRule?.trigger.watchedWallet);
   const [conditions, setConditions] = useState<RuleCondition[]>(editingRule?.conditions || []);
   const [actions, setActions] = useState<RuleAction[]>(editingRule?.actions || []);
+
+  const effectivePool = chain === 'monad' ? monadToken : pool;
 
   const addCondition = () => {
     setConditions(prev => [...prev, {
@@ -50,7 +55,8 @@ export function RuleComposer({ connected, onActivate, onConnectRequired, editing
 
   const ruleSummary = useMemo(() => {
     const parts: string[] = [];
-    parts.push(`WHEN ${triggerType} on ${pool}`);
+    const poolLabel = chain === 'monad' ? (monadToken ? `${monadToken.slice(0, 10)}...` : '?') : pool;
+    parts.push(`WHEN ${triggerType} on ${poolLabel} (${chain})`);
     if (conditions.length > 0) {
       const condStr = conditions
         .filter(c => c.value)
@@ -62,7 +68,7 @@ export function RuleComposer({ connected, onActivate, onConnectRequired, editing
       parts.push(`DO ${actions.map(a => a.type).join(', ')}`);
     }
     return parts.join(' → ');
-  }, [triggerType, pool, conditions, actions]);
+  }, [triggerType, pool, monadToken, chain, conditions, actions]);
 
   const handleActivate = () => {
     if (!connected) {
@@ -75,7 +81,8 @@ export function RuleComposer({ connected, onActivate, onConnectRequired, editing
       enabled: true,
       trigger: {
         type: triggerType,
-        pool,
+        pool: effectivePool,
+        chain,
         watchedWallet: showWallet && watchWallet ? watchWallet : undefined,
       },
       conditions,
@@ -121,8 +128,18 @@ export function RuleComposer({ connected, onActivate, onConnectRequired, editing
           <span className="text-xs text-uni-text1 ml-1">Trigger</span>
         </div>
         <div className="p-4 flex flex-col gap-3">
+          <PillSelect label="Chain" options={CHAINS} value={chain} onChange={v => { setChain(v); if (v === 'eth') setMonadToken(''); }} compact />
           <PillSelect label="Trigger Type" options={TRIGGERS} value={triggerType} onChange={setTriggerType} compact />
-          <PillSelect label="Pool" options={POOLS} value={pool} onChange={setPool} compact />
+          {chain === 'eth' ? (
+            <PillSelect label="Pool" options={ETH_POOLS} value={pool} onChange={setPool} compact />
+          ) : (
+            <PillInput
+              label="Token Address"
+              value={monadToken}
+              onChange={e => setMonadToken(e.target.value)}
+              placeholder="0x... (nad.fun token)"
+            />
+          )}
           <div className="flex items-center gap-3">
             <Switch
               checked={showWallet}

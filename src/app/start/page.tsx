@@ -11,28 +11,23 @@ type Scene =
   | "titleDrop"
   | "theHook"
   | "pillarsReveal"
-  | "chainPicker"
   | "howItWorks"
   | "connectWallet"
   | "launchCta";
-
-type ChainChoice = "ethereum" | "monad";
 
 const SCENES: Scene[] = [
   "titleDrop",
   "theHook",
   "pillarsReveal",
-  "chainPicker",
   "howItWorks",
   "connectWallet",
   "launchCta",
 ];
 
 const SCENE_DURATIONS: Record<Scene, number | null> = {
-  titleDrop: 4000,
+  titleDrop: 9000,
   theHook: 8500,
-  pillarsReveal: 13000,
-  chainPicker: null,
+  pillarsReveal: 10000,
   howItWorks: 5000,
   connectWallet: null,
   launchCta: null,
@@ -45,25 +40,6 @@ const pageTransition = {
   exit: { opacity: 0, transition: { duration: 0.25 } },
 };
 
-// ─── Chain data ─────────────────────────────────────────────────────────────────
-const CHAINS: Record<
-  ChainChoice,
-  { label: string; sub: string; color: string; colorRgb: string }
-> = {
-  ethereum: {
-    label: "Ethereum",
-    sub: "Uniswap V3 Pools",
-    color: "#627EEA",
-    colorRgb: "98,126,234",
-  },
-  monad: {
-    label: "Monad",
-    sub: "nad.fun Curves",
-    color: "#836EF9",
-    colorRgb: "131,110,249",
-  },
-};
-
 // ─── Pillar data ────────────────────────────────────────────────────────────────
 const PILLARS = [
   {
@@ -71,7 +47,7 @@ const PILLARS = [
     title: "Intelligence",
     quote:
       "Real-time charts on any pool — price, volume, fees, liquidity — streaming live.",
-    tags: ["Uniswap V3", "nad.fun", "WebSocket"],
+    tags: ["Uniswap V3", "nad.fun", "QuickNode"],
     color: "#FF007A",
     colorRgb: "255,0,122",
   },
@@ -220,57 +196,6 @@ function ActionsIcon({ size = 32 }: { size?: number }) {
         strokeWidth="2"
         strokeLinejoin="round"
       />
-    </svg>
-  );
-}
-
-// ─── Ethereum diamond icon ──────────────────────────────────────────────────────
-function EthIcon({ size = 48 }: { size?: number }) {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      style={{ width: size, height: size }}
-    >
-      <path d="M24 4 L8 24 L24 32 L40 24 Z" fill="#627EEA" fillOpacity="0.25" />
-      <path d="M24 4 L8 24 L24 20 Z" fill="#627EEA" fillOpacity="0.6" />
-      <path d="M24 4 L40 24 L24 20 Z" fill="#627EEA" fillOpacity="0.9" />
-      <path d="M8 24 L24 32 L24 20 Z" fill="#627EEA" fillOpacity="0.5" />
-      <path d="M40 24 L24 32 L24 20 Z" fill="#627EEA" fillOpacity="0.7" />
-      <path d="M8 27 L24 44 L24 35 Z" fill="#627EEA" fillOpacity="0.5" />
-      <path d="M40 27 L24 44 L24 35 Z" fill="#627EEA" fillOpacity="0.7" />
-    </svg>
-  );
-}
-
-// ─── Monad icon ─────────────────────────────────────────────────────────────────
-function MonadIcon({ size = 48 }: { size?: number }) {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      fill="none"
-      style={{ width: size, height: size }}
-    >
-      <circle
-        cx="24"
-        cy="24"
-        r="20"
-        stroke="#836EF9"
-        strokeWidth="2.5"
-        fill="#836EF9"
-        fillOpacity="0.12"
-      />
-      <text
-        x="24"
-        y="30"
-        textAnchor="middle"
-        fill="#836EF9"
-        fontSize="22"
-        fontWeight="800"
-        fontFamily="system-ui, sans-serif"
-      >
-        M
-      </text>
     </svg>
   );
 }
@@ -573,6 +498,84 @@ function TitleDropScene() {
         )}
       </AnimatePresence>
 
+      {/* Powered by logos */}
+      <AnimatePresence>
+        {phase === "settled" && (
+          <motion.div
+            className="flex flex-col items-center z-20 mt-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2, duration: 0.6 }}
+          >
+            <motion.p
+              className="text-[10px] uppercase tracking-[0.35em] font-semibold mb-4"
+              style={{ color: "rgba(255,255,255,0.2)" }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.2 }}
+            >
+              Powered by
+            </motion.p>
+            <div className="flex items-center gap-6">
+              {[
+                { src: "/uniswap-uni-logo.png", alt: "Uniswap", w: 40 },
+                { src: "/quicknode.webp", alt: "QuickNode", w: 40 },
+                { src: "/monad.png", alt: "Monad", w: 40 },
+              ].map((logo, i) => (
+                <motion.div
+                  key={logo.alt}
+                  className="relative"
+                  initial={{ opacity: 0, y: 16, scale: 0.7 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    delay: 1.4 + i * 0.15,
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 18,
+                  }}
+                >
+                  <motion.div
+                    className="rounded-xl flex items-center justify-center"
+                    style={{
+                      width: 56,
+                      height: 56,
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      backdropFilter: "blur(12px)",
+                    }}
+                    animate={{
+                      boxShadow: [
+                        "0 0 0px rgba(255,255,255,0)",
+                        "0 0 20px rgba(255,255,255,0.06)",
+                        "0 0 0px rgba(255,255,255,0)",
+                      ],
+                    }}
+                    transition={{
+                      duration: 3,
+                      delay: i * 0.8,
+                      repeat: Infinity,
+                      ease: "easeInOut",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logo.src}
+                      alt={logo.alt}
+                      style={{
+                        width: logo.w,
+                        height: logo.w,
+                        objectFit: "contain",
+                      }}
+                      draggable={false}
+                    />
+                  </motion.div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Slow rotating glow behind logo */}
       <motion.div
         className="absolute z-0 select-none rounded-full"
@@ -610,22 +613,23 @@ function TheHookScene() {
   }, []);
 
   useEffect(() => {
-    if (beat === 1 && !counterRef.current) {
-      counterRef.current = setInterval(() => {
-        setCounter((c) => {
-          if (c >= 2400000000) {
-            if (counterRef.current) clearInterval(counterRef.current);
-            return 2400000000;
-          }
-          return Math.min(
-            c + Math.floor(Math.random() * 80000000 + 20000000),
-            2400000000
-          );
-        });
-      }, 50);
-    }
+    if (beat !== 1) return;
+    const id = setInterval(() => {
+      setCounter((c) => {
+        if (c >= 2400000000) {
+          clearInterval(id);
+          return 2400000000;
+        }
+        return Math.min(
+          c + Math.floor(Math.random() * 80000000 + 20000000),
+          2400000000
+        );
+      });
+    }, 50);
+    counterRef.current = id;
     return () => {
-      if (counterRef.current) clearInterval(counterRef.current);
+      clearInterval(id);
+      counterRef.current = null;
     };
   }, [beat]);
 
@@ -765,7 +769,7 @@ function PillarsRevealScene() {
   useEffect(() => {
     if (phase !== "showcase" || activeIdx < 0) return;
     if (activeIdx >= PILLARS.length - 1) return;
-    const t = setTimeout(() => setActiveIdx((prev) => prev + 1), 2800);
+    const t = setTimeout(() => setActiveIdx((prev) => prev + 1), 1800);
     return () => clearTimeout(t);
   }, [phase, activeIdx]);
 
@@ -961,357 +965,9 @@ function PillarsRevealScene() {
   );
 }
 
-// ─── Scene 4: Chain Picker (Interactive) ────────────────────────────────────────
-function ChainPickerScene({
-  onSelect,
-}: {
-  onSelect: (chain: ChainChoice) => void;
-}) {
-  const [picked, setPicked] = useState<ChainChoice | null>(null);
-  const [hovered, setHovered] = useState<ChainChoice | null>(null);
-  const [particles, setParticles] = useState<
-    Array<{ id: number; x: number; y: number; color: string }>
-  >([]);
-
-  const handlePick = (chain: ChainChoice, e: React.MouseEvent) => {
-    if (picked) return;
-    setPicked(chain);
-
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const burst = Array.from({ length: 14 }, (_, i) => ({
-      id: Date.now() + i,
-      x: cx,
-      y: cy,
-      color: CHAINS[chain].color,
-    }));
-    setParticles(burst);
-    setTimeout(() => setParticles([]), 900);
-    setTimeout(() => onSelect(chain), 1500);
-  };
-
-  const chainEntries: ChainChoice[] = ["ethereum", "monad"];
-
-  return (
-    <motion.div
-      {...pageTransition}
-      className="flex flex-col items-center justify-center h-full px-4 relative overflow-hidden"
-    >
-      {/* Dynamic background glow */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none z-0"
-        animate={{
-          background:
-            hovered && !picked
-              ? `radial-gradient(ellipse 70% 50% at 50% 55%, rgba(${CHAINS[hovered].colorRgb}, 0.1) 0%, transparent 70%)`
-              : picked
-                ? `radial-gradient(ellipse 70% 50% at 50% 55%, rgba(${CHAINS[picked].colorRgb}, 0.18) 0%, transparent 70%)`
-                : "radial-gradient(ellipse 70% 50% at 50% 55%, rgba(255,255,255,0.015) 0%, transparent 70%)",
-        }}
-        transition={{ duration: 0.6 }}
-      />
-
-      <FloatingParticles count={8} seed={333} />
-
-      {/* Decorative rotating rings */}
-      <motion.div
-        className="absolute z-0 pointer-events-none"
-        style={{
-          width: 540,
-          height: 540,
-          border: "1.5px dashed rgba(255,255,255,0.03)",
-          borderRadius: "50%",
-        }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        className="absolute z-0 pointer-events-none"
-        style={{
-          width: 420,
-          height: 420,
-          border: "1px dashed rgba(255,255,255,0.02)",
-          borderRadius: "50%",
-        }}
-        animate={{ rotate: -360 }}
-        transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
-      />
-
-      {/* Title */}
-      <motion.div className="z-10 text-center mb-6">
-        <motion.p
-          className="text-[10px] font-bold tracking-[0.35em] uppercase mb-2"
-          style={{ color: "rgba(255,255,255,0.18)" }}
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-        >
-          Choose your chain
-        </motion.p>
-        <motion.h2
-          className="text-4xl sm:text-5xl font-bold leading-none"
-          style={{ color: "#FFFFFF" }}
-          initial={{ opacity: 0, y: -30, scale: 0.9 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{
-            delay: 0.1,
-            type: "spring",
-            stiffness: 180,
-            damping: 14,
-          }}
-        >
-          Pick your network
-        </motion.h2>
-      </motion.div>
-
-      {/* Chain cards */}
-      <div className="flex gap-6 z-10">
-        {chainEntries.map((chain, i) => {
-          const data = CHAINS[chain];
-          const sel = picked === chain;
-          const dim = picked !== null && !sel;
-          const hov = hovered === chain && !picked;
-
-          return (
-            <motion.button
-              key={chain}
-              className="relative flex flex-col items-center rounded-2xl px-10 py-8 cursor-pointer overflow-hidden"
-              style={{
-                background: sel
-                  ? `linear-gradient(145deg, rgba(${data.colorRgb}, 0.1), rgba(${data.colorRgb}, 0.03))`
-                  : hov
-                    ? `linear-gradient(145deg, rgba(${data.colorRgb}, 0.06), rgba(255,255,255,0.04))`
-                    : "rgba(255,255,255,0.04)",
-                border: sel
-                  ? `2px solid ${data.color}`
-                  : hov
-                    ? `2px solid rgba(${data.colorRgb}, 0.35)`
-                    : "2px solid rgba(255,255,255,0.08)",
-                boxShadow: sel
-                  ? `0 12px 36px rgba(${data.colorRgb}, 0.22), 0 2px 10px rgba(0,0,0,0.2)`
-                  : hov
-                    ? `0 10px 30px rgba(${data.colorRgb}, 0.14), 0 2px 10px rgba(0,0,0,0.1)`
-                    : "0 2px 10px rgba(0,0,0,0.1)",
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
-                outline: "none",
-                transition:
-                  "border-color 0.3s ease, box-shadow 0.35s ease, background 0.35s ease",
-                minWidth: 200,
-              }}
-              initial={{ opacity: 0, y: 44, scale: 0.82 }}
-              animate={{
-                opacity: dim ? 0.28 : 1,
-                y: 0,
-                scale: sel ? 1.08 : dim ? 0.92 : 1,
-                filter: dim
-                  ? "blur(1.5px) saturate(0.4)"
-                  : "blur(0px) saturate(1)",
-              }}
-              whileHover={
-                !picked
-                  ? {
-                      scale: 1.06,
-                      y: -8,
-                      transition: {
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 18,
-                      },
-                    }
-                  : undefined
-              }
-              whileTap={!picked ? { scale: 0.95 } : undefined}
-              transition={{
-                delay: 0.15 + i * 0.1,
-                type: "spring",
-                stiffness: 220,
-                damping: 18,
-              }}
-              onClick={(e) => handlePick(chain, e)}
-              onMouseEnter={() => {
-                if (!picked) setHovered(chain);
-              }}
-              onMouseLeave={() => setHovered(null)}
-            >
-              {/* Inner glow */}
-              <motion.div
-                className="absolute inset-0 rounded-2xl pointer-events-none"
-                animate={{
-                  background:
-                    hov || sel
-                      ? `radial-gradient(circle at 50% 30%, rgba(${data.colorRgb}, ${sel ? 0.1 : 0.06}), transparent 70%)`
-                      : "transparent",
-                }}
-                transition={{ duration: 0.4 }}
-              />
-
-              {/* Icon */}
-              <motion.div
-                className="relative z-10 mb-4"
-                animate={
-                  sel
-                    ? { rotate: [0, -15, 15, -8, 0], scale: [1, 1.15, 1.05] }
-                    : hov
-                      ? { y: [0, -4, 0] }
-                      : { y: 0 }
-                }
-                transition={
-                  sel
-                    ? { duration: 0.6, ease: "easeOut" }
-                    : hov
-                      ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" }
-                      : { duration: 0.4 }
-                }
-              >
-                {chain === "ethereum" ? (
-                  <EthIcon size={64} />
-                ) : (
-                  <MonadIcon size={64} />
-                )}
-              </motion.div>
-
-              {/* Label */}
-              <p
-                className="text-lg font-bold z-10 tracking-tight"
-                style={{
-                  color: data.color,
-                  textShadow:
-                    hov || sel
-                      ? `0 0 20px rgba(${data.colorRgb}, 0.3)`
-                      : "none",
-                  transition: "text-shadow 0.3s",
-                }}
-              >
-                {data.label}
-              </p>
-
-              {/* Sub */}
-              <p
-                className="text-[12px] mt-1 z-10"
-                style={{ color: "rgba(255,255,255,0.35)" }}
-              >
-                {data.sub}
-              </p>
-
-              {/* Checkmark badge */}
-              {sel && (
-                <motion.div
-                  className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg z-20"
-                  style={{ background: data.color }}
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 400,
-                    damping: 12,
-                    delay: 0.1,
-                  }}
-                >
-                  ✓
-                </motion.div>
-              )}
-
-              {/* Pulse ring */}
-              {sel && (
-                <motion.div
-                  className="absolute inset-0 rounded-2xl pointer-events-none z-0"
-                  style={{ border: `2px solid ${data.color}` }}
-                  initial={{ opacity: 0.8, scale: 1 }}
-                  animate={{ opacity: 0, scale: 1.18 }}
-                  transition={{ duration: 0.9, repeat: 2 }}
-                />
-              )}
-            </motion.button>
-          );
-        })}
-      </div>
-
-      {/* Particle burst */}
-      <AnimatePresence>
-        {particles.map((p, i) => {
-          const angle = (i / 14) * Math.PI * 2;
-          const dist = 55 + seededRandom(i * 97) * 50;
-          const size = 5 + seededRandom(i * 83) * 7;
-          return (
-            <motion.div
-              key={p.id}
-              className="fixed pointer-events-none z-50 rounded-full"
-              style={{
-                width: size,
-                height: size,
-                background: p.color,
-                left: p.x,
-                top: p.y,
-                boxShadow: `0 0 8px ${p.color}`,
-              }}
-              initial={{ opacity: 1, scale: 1.2, x: 0, y: 0 }}
-              animate={{
-                opacity: 0,
-                scale: 0,
-                x: Math.cos(angle) * dist,
-                y: Math.sin(angle) * dist,
-              }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.7, ease: "easeOut" }}
-            />
-          );
-        })}
-      </AnimatePresence>
-
-      {/* Bottom hint */}
-      <div className="z-10 mt-8">
-        <AnimatePresence mode="wait">
-          {picked ? (
-            <motion.div
-              key="confirm"
-              className="flex flex-col items-center gap-1"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-            >
-              <motion.p
-                className="text-lg font-bold tracking-wide"
-                style={{ color: CHAINS[picked].color }}
-              >
-                {CHAINS[picked].label} it is!
-              </motion.p>
-              <motion.p
-                className="text-xs"
-                style={{ color: "rgba(255,255,255,0.3)" }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-              >
-                Loading your chain...
-              </motion.p>
-            </motion.div>
-          ) : (
-            <motion.p
-              key="hint"
-              className="text-[11px] tracking-[0.2em] font-semibold uppercase"
-              style={{ color: "rgba(255,255,255,0.15)" }}
-              animate={{ opacity: [0.15, 0.45, 0.15] }}
-              transition={{
-                duration: 2.5,
-                repeat: Infinity,
-                ease: "easeInOut",
-              }}
-            >
-              Click a chain to continue
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
-  );
-}
-
-// ─── Scene 5: How It Works ──────────────────────────────────────────────────────
-function HowItWorksScene({ chosenChain }: { chosenChain: ChainChoice }) {
+// ─── Scene 4: How It Works ──────────────────────────────────────────────────────
+function HowItWorksScene() {
   const [beat, setBeat] = useState(0);
-  const chain = CHAINS[chosenChain];
 
   useEffect(() => {
     const t1 = setTimeout(() => setBeat(1), 1200);
@@ -1324,12 +980,7 @@ function HowItWorksScene({ chosenChain }: { chosenChain: ChainChoice }) {
 
   const beats = [
     {
-      icon:
-        chosenChain === "ethereum" ? (
-          <EthIcon size={40} />
-        ) : (
-          <MonadIcon size={40} />
-        ),
+      icon: <IntelligenceIcon size={40} />,
       text: "Track any pool",
       sub: "Live swap data, your way",
     },
@@ -1346,7 +997,7 @@ function HowItWorksScene({ chosenChain }: { chosenChain: ChainChoice }) {
   ];
 
   const stepColors = [
-    { color: chain.color, colorRgb: chain.colorRgb },
+    { color: "#FF007A", colorRgb: "255,0,122" },
     { color: "#7B61FF", colorRgb: "123,97,255" },
     { color: "#34D399", colorRgb: "52,211,153" },
   ];
@@ -1362,7 +1013,7 @@ function HowItWorksScene({ chosenChain }: { chosenChain: ChainChoice }) {
       <motion.div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
-          background: `radial-gradient(ellipse 60% 40% at 50% 50%, rgba(${chain.colorRgb}, 0.06) 0%, transparent 70%)`,
+          background: "radial-gradient(ellipse 60% 40% at 50% 50%, rgba(255,0,122,0.06) 0%, transparent 70%)",
         }}
       />
 
@@ -1738,10 +1389,9 @@ function ConnectWalletScene({
   );
 }
 
-// ─── Scene 7: Launch CTA ────────────────────────────────────────────────────────
-function LaunchCtaScene({ chosenChain }: { chosenChain: ChainChoice }) {
+// ─── Scene 6: Launch CTA ────────────────────────────────────────────────────────
+function LaunchCtaScene() {
   const router = useRouter();
-  const chain = CHAINS[chosenChain];
 
   const enter = useCallback(() => {
     router.push("/");
@@ -1765,12 +1415,12 @@ function LaunchCtaScene({ chosenChain }: { chosenChain: ChainChoice }) {
         duration: seededRandom(i * 67 + 5) * 3 + 3,
         color:
           i % 3 === 0
-            ? chain.color
+            ? "#FF007A"
             : i % 3 === 1
-              ? "#FF007A"
-              : "#7B61FF",
+              ? "#7B61FF"
+              : "#34D399",
       })),
-    [chain.color]
+    []
   );
 
   return (
@@ -1778,14 +1428,14 @@ function LaunchCtaScene({ chosenChain }: { chosenChain: ChainChoice }) {
       {...pageTransition}
       className="flex flex-col items-center justify-center h-full relative overflow-hidden"
     >
-      <ParticleRain count={35} colors={["#FF007A", "#7B61FF", chain.color]} />
+      <ParticleRain count={35} colors={["#FF007A", "#7B61FF", "#34D399"]} />
       <FloatingParticles count={8} seed={999} />
 
       {/* Background glow */}
       <div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
-          background: `radial-gradient(ellipse 80% 65% at 50% 40%, rgba(${chain.colorRgb}, 0.12) 0%, transparent 65%)`,
+          background: "radial-gradient(ellipse 80% 65% at 50% 40%, rgba(255,0,122,0.12) 0%, transparent 65%)",
         }}
       />
 
@@ -1795,7 +1445,7 @@ function LaunchCtaScene({ chosenChain }: { chosenChain: ChainChoice }) {
         style={{
           width: 500,
           height: 500,
-          border: `2px solid rgba(${chain.colorRgb}, 0.06)`,
+          border: "2px solid rgba(255,0,122,0.06)",
           borderRadius: "50%",
         }}
         initial={{ scale: 0.6, opacity: 0 }}
@@ -1807,7 +1457,7 @@ function LaunchCtaScene({ chosenChain }: { chosenChain: ChainChoice }) {
         style={{
           width: 650,
           height: 650,
-          border: `1.5px dashed rgba(${chain.colorRgb}, 0.04)`,
+          border: "1.5px dashed rgba(123,97,255,0.04)",
           borderRadius: "50%",
         }}
         animate={{ rotate: 360 }}
@@ -1933,17 +1583,14 @@ export default function StartPage() {
   const router = useRouter();
   const { isConnected } = useAccount();
   const [sceneIndex, setSceneIndex] = useState(0);
-  const [chosenChain, setChosenChain] = useState<ChainChoice>("ethereum");
-  const [pickerDone, setPickerDone] = useState(false);
   const [walletDone, setWalletDone] = useState(false);
 
   const scene = SCENES[sceneIndex];
 
   const canAdvance = useCallback(() => {
-    if (scene === "chainPicker" && !pickerDone) return false;
     if (scene === "connectWallet" && !walletDone) return false;
     return sceneIndex < SCENES.length - 1;
-  }, [scene, sceneIndex, pickerDone, walletDone]);
+  }, [scene, sceneIndex, walletDone]);
 
   const canGoBack = sceneIndex > 0;
 
@@ -1978,15 +1625,6 @@ export default function StartPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [canAdvance, canGoBack, advance, goBack]);
-
-  const handleChainSelect = useCallback(
-    (chain: ChainChoice) => {
-      setChosenChain(chain);
-      setPickerDone(true);
-      advance();
-    },
-    [advance]
-  );
 
   const handleWalletConnected = useCallback(() => {
     setWalletDone(true);
@@ -2049,17 +1687,8 @@ export default function StartPage() {
           {scene === "pillarsReveal" && (
             <PillarsRevealScene key="pillarsReveal" />
           )}
-          {scene === "chainPicker" && (
-            <ChainPickerScene
-              key="chainPicker"
-              onSelect={handleChainSelect}
-            />
-          )}
           {scene === "howItWorks" && (
-            <HowItWorksScene
-              key="howItWorks"
-              chosenChain={chosenChain}
-            />
+            <HowItWorksScene key="howItWorks" />
           )}
           {scene === "connectWallet" && (
             <ConnectWalletScene
@@ -2068,10 +1697,7 @@ export default function StartPage() {
             />
           )}
           {scene === "launchCta" && (
-            <LaunchCtaScene
-              key="launchCta"
-              chosenChain={chosenChain}
-            />
+            <LaunchCtaScene key="launchCta" />
           )}
         </AnimatePresence>
       </div>

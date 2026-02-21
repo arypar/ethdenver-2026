@@ -40,6 +40,7 @@ export function ActionDetailDialog({ action, open, onClose, onExecute, connected
             <Row label="Rule" value={action.ruleName} />
             <Row label="Type" value={action.details.eventType} />
             <Row label="Pool" value={action.details.pool} />
+            <Row label="Chain" value={action.details.chain === 'monad' ? 'Monad (nad.fun)' : 'Ethereum'} />
             <Row label="Trigger" value={action.triggerReason} />
           </Section>
 

@@ -5,8 +5,9 @@ import { CSS } from '@dnd-kit/utilities';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { PoolInput } from '@/components/ui/pool-input';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTokenResolve } from '@/hooks/use-token-resolve';
 import { CATEGORY_META, type CanvasBlock, type BlockCategory } from './block-types';
 import type { ConditionOperator } from '@/lib/types';
 
@@ -80,6 +81,42 @@ export function RuleBlock({ block, onUpdate, onRemove, poolTokens }: RuleBlockPr
   );
 }
 
+function MonadTokenInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { info, resolving } = useTokenResolve(value, true);
+
+  if (info && !resolving) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className={cn(INPUT_CLASS, 'flex items-center gap-2 rounded-md border px-2.5 w-full')}>
+          {info.image && <img src={info.image} alt="" className="h-5 w-5 rounded-full shrink-0" />}
+          <span className="text-[13px] font-medium text-white/90 truncate">${info.symbol}</span>
+          <span className="text-[11px] text-white/35 truncate">{info.name}</span>
+        </div>
+        <button
+          onClick={() => onChange('')}
+          className="rounded-md p-1 text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-colors shrink-0"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={e => onChange(e.target.value.trim())}
+        placeholder="0x... token address"
+        className={INPUT_CLASS}
+      />
+      {resolving && (
+        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-white/30" />
+      )}
+    </div>
+  );
+}
+
 function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; updateField: (key: string, value: string | number) => void; poolTokens?: string[] }) {
   if (block.category === 'trigger') {
     const chain = String(block.config.chain || 'eth');
@@ -93,11 +130,9 @@ function BlockConfig({ block, updateField, poolTokens }: { block: CanvasBlock; u
           </SelectContent>
         </Select>
         {chain === 'monad' ? (
-          <Input
+          <MonadTokenInput
             value={String(block.config.pool || '')}
-            onChange={e => updateField('pool', e.target.value.trim())}
-            placeholder="0x... token address"
-            className={INPUT_CLASS}
+            onChange={v => updateField('pool', v)}
           />
         ) : (
           <PoolInput

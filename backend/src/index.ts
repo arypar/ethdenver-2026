@@ -16,6 +16,7 @@ import testRouter from './routes/test.js';
 import quicknodeRouter from './routes/quicknode.js';
 import streamsRouter from './routes/streams.js';
 import dismissedSuggestionsRouter from './routes/dismissed-suggestions.js';
+import nadfunQuoteRouter from './routes/nadfun-quote.js';
 import { tracker } from './lib/pool-tracker.js';
 import { monadTracker } from './lib/monad-tracker.js';
 import { setupWebSocket } from './lib/ws-server.js';
@@ -59,6 +60,7 @@ app.use('/', testRouter);
 app.use('/quicknode', quicknodeRouter);
 app.use('/streams', streamsRouter);
 app.use('/api', dismissedSuggestionsRouter);
+app.use('/nadfun', nadfunQuoteRouter);
 
 app.get('/health', (_req, res) => {
   res.json({

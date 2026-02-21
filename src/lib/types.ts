@@ -20,7 +20,6 @@ export interface SavedChart {
   data: ChartDataPoint[];
   createdAt: number;
   backfilling?: boolean;
-  backfillProgress?: number;
 }
 
 export interface ChartDataPoint {
@@ -85,6 +84,7 @@ export interface ActionItem {
   details: {
     eventType: string;
     pool: string;
+    chain?: ChainId;
     conditionsMet: string[];
     proposedActions: string[];
     actionTypes?: string[];
